@@ -8,6 +8,10 @@ from tempest import grid
 
 settings_path = 'settings/intro.yaml'
 
+workdir=os.getcwd()
+print(workdir)
+sys.path.append(workdir)
+
 with open(settings_path, 'r') as file:
     settings = yaml.safe_load(file)
 
