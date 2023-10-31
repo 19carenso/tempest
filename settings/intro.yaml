@@ -14,7 +14,7 @@ DIR_OUT: '/output'
 DIR_TEMPDATA: '/cache'
 
 # Where we store the data we need for the analysis, independant of model_region
-DIR_DATA_OUT: '/homedata/mcarenso/tempest'
+DIR_DATA_OUT: '/home/mcarenso/code/tempest/input/intro'
 
 # Data that are too big to be stored in your workspace
 DIR_DATA_IN: '/home/mcarenso/code/tempest/input/intro/data' ## This is an extract made by /home/mcarenso/code/tempest/tests/intro/extract_data.py
