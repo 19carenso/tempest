@@ -354,7 +354,7 @@ class Grid(CaseStudy):
             ds.to_netcdf(file)    
         else:
             # Open the existing NetCDF file using xarray
-            ds = xr.open_dataset(file, mode = 'a')
+            ds = xr.open_dataset(file)
             # Check if the loaded dataset contains the required coordinates
             required_coordinates = ['lat_global', 'lon_global', 'days']
             missing_coordinates = [coord for coord in required_coordinates if coord not in ds.coords]
@@ -404,7 +404,7 @@ class Grid(CaseStudy):
             for da_day, key in zip(da_days_funcs, keys) : 
             ## concat the list of dataarrays along days dimensions
                 da_var_regrid = xr.concat(da_day, dim = 'days')
-                var_ds[key] = da_var_regrid
+                var_ds = var_ds.assign(**{key: da_var_regrid})
             
             file = self.get_var_ds_file(var_id)
             var_ds.to_nectdf(file) ## this should update the stored .nc
