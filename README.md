@@ -5,7 +5,7 @@ Tallying Engine for Multiscale Precipitation Events with Storm Tracking.
 
 ### Prerequisites
 
-- Python 3.x
+- Python 3.8
 
 ### Setting Up a Virtual Environment (Recommended)
 

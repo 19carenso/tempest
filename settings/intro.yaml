@@ -14,10 +14,10 @@ DIR_OUT: '/output'
 DIR_TEMPDATA: '/cache'
 
 # Where we store the data we need for the analysis, independant of model_region
-DIR_DATA_OUT: '/home/mcarenso/code/tempest/input/intro'
+DIR_DATA_OUT: 'input/intro'
 
 # Data that are too big to be stored in your workspace
-DIR_DATA_IN: '/home/mcarenso/code/tempest/input/intro/data' ## This is an extract made by /home/mcarenso/code/tempest/tests/intro/extract_data.py
+DIR_DATA_IN: 'input/intro/data' ## This is an extract made by /home/mcarenso/code/tempest/tests/intro/extract_data.py
 
 # This is typically why I think we need to be flexible in the loading of data
 # But it currently only works with the Dyamond SAM filenames..
