@@ -1,1 +1,8 @@
 # Ignorer les datas pour l'intro. le README demande de les télécharger.
+cache/
+.vscode/
+figures/*
+input/intro/DYAMOND_SAM_ITCZ_intro/
+output/DYAMOND_SAM_ITCZ_intro/
+tests/vis.ipynb
+build/

@@ -10,7 +10,7 @@ import numpy as np
 import datetime as dt
 import re
 
-from tempest.utils import load_rel_table, extract_digit_after_sign
+from .utils import load_rel_table, extract_digit_after_sign
 
 from functools import reduce
 

@@ -10,6 +10,7 @@ import xarray as xr
 from importlib import import_module
 
 
+## This is actually terrible, as it's already imported from main and should not differ afterwards
 settings_path = 'settings/settings.yaml'
 
 with open(settings_path, 'r') as file:
@@ -62,7 +63,7 @@ def get_timestamp_from_filename(filename):
     else : return None
 
 def get_rootname_from_i_t(i_t):
-    string_timestamp = str(i_t * 240).zfill(10)
+    string_timestamp = str(int(int(i_t) * 240)).zfill(10)
     result = f"DYAMOND_9216x4608x74_7.5s_4km_4608_"+string_timestamp
     return result
 

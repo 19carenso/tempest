@@ -16,8 +16,8 @@ from datetime import datetime as dt
 
 import matplotlib.pyplot as plt
 
-from tempest.casestudy import CaseStudy
-from tempest.utils import load_seg, load_var ## All these imports could actually be resumed by importing an instance of Handler
+from .casestudy import CaseStudy
+from .utils import load_seg, load_var ## All these imports could actually be resumed by importing an instance of Handler
 
 class Grid(CaseStudy): 
     # except verbose i actually don't want any
@@ -407,7 +407,8 @@ class Grid(CaseStudy):
                 var_ds = var_ds.assign(**{key: da_var_regrid})
             
             file = self.get_var_ds_file(var_id)
-            var_ds.to_nectdf(file) ## this should update the stored .nc
+            os.remove(file)
+            var_ds.to_netcdf(file) ## this should update the stored .nc
             var_ds.close()
         
         else : print("nothing to compute then")

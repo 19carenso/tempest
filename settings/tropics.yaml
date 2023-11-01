@@ -4,7 +4,7 @@
 
 # Basic Settings
 MODEL: 'DYAMOND_SAM'
-REGION: 'ITCZ'
+REGION: 'Tropics'
 
 # Inner paths 
 # I think that ../ should always led to root of the project
@@ -44,6 +44,6 @@ norm_specs:
   PW: null
 
 # Regions of Analysis
-BOX: [0, 20, 310, 340] # [lat_min, lat_max, lon_min, lon_max]
+BOX: [-30, 30, 0, 360] # [lat_min, lat_max, lon_min, lon_max]
 TIME_RANGE: [832, 1917] # [start, end] in timestep (so rows) of dir_data_in
 # Box corresponds to the inedx [[2304, 3840], [7936, 8704]] in DYAMOND_SAM data
