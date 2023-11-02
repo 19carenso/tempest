@@ -1,1 +1,0 @@
-Contient les distributions, cartes de fréquences, Y peuvent être stockées içi (ainsi que les notebooks qui les créent), en bref les données légères qui permettent de refaire les figures.
