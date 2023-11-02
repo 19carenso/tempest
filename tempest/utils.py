@@ -7,14 +7,13 @@ import yaml
 import gc
 import xarray as xr
 
-from importlib import import_module
-
-
 ## This is actually terrible, as it's already imported from main and should not differ afterwards
-settings_path = 'settings/settings.yaml'
+## Hopefully for now it's only used by this load_seg func which is not called yet. 
+## Handler must be made before using load_seg...
+# settings_path = 'settings/settings.yaml'
 
-with open(settings_path, 'r') as file:
-    settings = yaml.safe_load(file)
+# with open(settings_path, 'r') as file:
+#     settings = yaml.safe_load(file)
 
 ## This function is specific to your REL_TABLE in settings
 def load_rel_table(file_path):
@@ -67,23 +66,22 @@ def get_rootname_from_i_t(i_t):
     result = f"DYAMOND_9216x4608x74_7.5s_4km_4608_"+string_timestamp
     return result
 
-
-def load_seg(i_t,df):
-    ## i_t is incorrectly passed there 
-    full_path = '/'+df.iloc[i_t]['img_seg_path']
+# def load_seg(i_t,df):
+#     ## i_t is incorrectly passed there 
+#     full_path = '/'+df.iloc[i_t]['img_seg_path']
     
-    if settings['DIR_TOOCANSEG_DYAMOND'] is None:
-        path_TOOCAN = full_path
-    else:
+#     if settings['DIR_TOOCANSEG_DYAMOND'] is None:
+#         path_TOOCAN = full_path
+#     else:
 
-        filename = os.path.basename(full_path)
-        date = os.path.basename(os.path.dirname(full_path))
-        path_TOOCAN = os.path.join(settings['DIR_TOOCANSEG_DYAMOND'],date,filename)
+#         filename = os.path.basename(full_path)
+#         date = os.path.basename(os.path.dirname(full_path))
+#         path_TOOCAN = os.path.join(settings['DIR_TOOCANSEG_DYAMOND'],date,filename)
         
-    # Load TOOCAN data
-    img_TOOCAN = xr.open_dataarray(path_TOOCAN)
+#     # Load TOOCAN data
+#     img_TOOCAN = xr.open_dataarray(path_TOOCAN)
     
-    return img_TOOCAN
+#     return img_TOOCAN
 
 def load_var(grid, var_id, i_t): # the fact that we have to pass grid as an object justifies that 
                                  # Handler class should be made and inherit from CaseStudy or even Grid.

@@ -17,7 +17,7 @@ from datetime import datetime as dt
 import matplotlib.pyplot as plt
 
 from .casestudy import CaseStudy
-from .utils import load_seg, load_var ## All these imports could actually be resumed by importing an instance of Handler
+from .utils import load_var # All these imports could actually be resumed by importing an instance of Handler
 
 class Grid(CaseStudy): 
     # except verbose i actually don't want any
@@ -31,9 +31,6 @@ class Grid(CaseStudy):
         ## Bool for running a quicker computation (can multiply by x2 or x8 depending on the function)
         self.fast = fast
 
-        ## Should be deleted and actually loaded after checking if the desired file exists and is functionnal
-        self.overwrite = overwrite 
-        print(self.overwrite)
         
         ## explicitly verbose
         self.verbose = verbose
@@ -41,22 +38,28 @@ class Grid(CaseStudy):
         ## very talkative one, mainly for computation time measurements
         self.verbose_steps = verbose_steps
 
-        if self.overwrite:
-            self._prepare_grid()
-            filepath = os.getcwd() + self.settings["DIR_OUT"] + '/' + self.name 
-            if not os.path.exists(filepath):
-                os.makedirs(filepath)
-
-            filename = filepath + '/grid_attributes.pkl'
-            self.save_grid_attr(filename)
-        else :
-            filename = os.getcwd() + self.settings["DIR_OUT"] + '/' + self.name + '/grid_attributes.pkl'
-            self.load_grid_attr(filename)
+        self.make_output_ready(overwrite)
 
         # Funcs to compute on variable 
         # Actually this should be done in CaseStudy and passed there, so that it'd be eazy to control which func for any var_id
-        
         self.func_names = ['max', 'mean']
+
+    def make_output_ready(self, overwrite):
+        self.path_out = os.getcwd() + self.settings["DIR_OUT"] + '/' + self.name 
+        if not os.path.exists(self.path_out):
+            self.overwrite = True
+        else : self.overwrite = overwrite 
+
+        if self.overwrite:
+            self._prepare_grid()
+            if not os.path.exists(self.path_out):
+                os.makedirs(self.path_out)
+
+            filename = self.path_out + '/grid_attributes.pkl'
+            self.save_grid_attr(filename)
+        else :
+            filename = self.path_out + '/grid_attributes.pkl'
+            self.load_grid_attr(filename)
 
     def save_grid_attr(self, filename):
         state = {attr: getattr(self, attr) for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")}
@@ -317,9 +320,9 @@ class Grid(CaseStudy):
 
         return first_value
     
-    def plot_grid(self):
+    def plot_grid(self, w = 10, h = 5):
         # Create a 1x2 grid of subplots
-        plt.figure(figsize=(10, 5))  # Adjust the figure size as needed
+        plt.figure(figsize=(w, h))  # Adjust the figure size as needed
         plt.subplot(1, 2, 1)  # Create the first subplot
 
         ## Here checks if the global_pixel_surf in ds looks correct (and is accessible so that grid.ds is not corrupted)

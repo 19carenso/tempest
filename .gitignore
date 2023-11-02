@@ -1,10 +1,10 @@
-# Ignorer les datas pour l'intro. le README demande de les télécharger.
 cache/
 .vscode/
+build/
 figures/*
 input/intro/DYAMOND_SAM_ITCZ_intro/
-output/DYAMOND_SAM_ITCZ_intro/
-tests/vis.ipynb
-build/
-tempest/__pycache__/
+output/*
+tempest/__pycache__/*
+tempest/plots/__pycache__/*
 tempest.egg-info
+output/DYAMOND_SAM_ITCZ_intro/grid_attributes.pkl
