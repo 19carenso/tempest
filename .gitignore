@@ -6,3 +6,5 @@ input/intro/DYAMOND_SAM_ITCZ_intro/
 output/DYAMOND_SAM_ITCZ_intro/
 tests/vis.ipynb
 build/
+tempest/__pycache__/
+tempest.egg-info
