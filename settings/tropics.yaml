@@ -48,5 +48,21 @@ BOX: [-30, 30, 0, 360] # [lat_min, lat_max, lon_min, lon_max]
 TIME_RANGE: [832, 1917] # [start, end] in timestep (so rows) of dir_data_in
 # Box corresponds to the inedx [[2304, 3840], [7936, 8704]] in DYAMOND_SAM data
 
-skip:
-  Prec:
+new_var: ## These list and dict must be sorted by dependency
+         ## If y depends on x, x must be first in variables_id
+  variables_id:
+    [
+      "Prec"
+    ]
+  dependencies:
+    {
+      "Prec" : ["Precac", "Precac-1"]
+    }
+  functions:
+    {
+      "Prec" : "load_prec"
+    }
+
+# there should be a function to assert that. 
+skip_prec_i_t : 
+  [862,  863,  958,  959, 1054, 1055, 1150, 1151, 1246, 1247, 1342, 1343, 1438, 1439, 1534, 1535, 1630, 1631, 1726, 1727, 1822, 1823] 

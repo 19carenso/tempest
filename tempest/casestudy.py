@@ -20,24 +20,24 @@ class CaseStudy():
     Documentation for class CaseStudy
     """
         
-    def __init__(self, settings, verbose = False, overwrite = False):
+    def __init__(self, handler, verbose = False, overwrite = False):
         
-        self.settings = settings
+        self.settings = handler.settings
 
         self.verbose = verbose
         
         self.overwrite = overwrite
         
-        self.region = settings['REGION']
-        self.model = settings['MODEL']
+        self.region = self.settings['REGION']
+        self.model = self.settings['MODEL']
         
         self.name = '%s_%s' % (self.model, self.region)
 
-        self.data_in = settings['DIR_DATA_IN']
+        self.data_in = self.settings['DIR_DATA_IN']
         
-        self.rel_table = load_rel_table(settings['REL_TABLE'])
+        self.rel_table = load_rel_table(self.settings['REL_TABLE'])
         
-        self.data_out = os.path.join(settings['DIR_DATA_OUT'], self.name)
+        self.data_out = os.path.join(self.settings['DIR_DATA_OUT'], self.name)
         
         self._set_region_coord_and_period()
         
@@ -63,17 +63,12 @@ class CaseStudy():
         else :
             # print('Found json file at {json_path}, loading it..')
             self.variables_names, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
-            
-        if verbose : self._chek_variables_days_and_i_t()
 
-        json_filename = 'new_variables.json'
-        new_var_json_path = os.path.join(self.data_out, json_filename)
-        if not os.path.exists(new_var_json_path):
-            print(f"Json file of new variables not found, so please create it at path {self.data_out} in same fashion than specified in README.md !!!" )
-        elif os.path.exists(new_var_json_path):
-            print("Loading the new variables and their corresponding function for loading them")
-            self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id(new_var_json_path)
-            self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
+        self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
+        self.days_i_t_per_var_id = self.skip_prec_i_t()
+        self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
+
+        if verbose : self._chek_variables_days_and_i_t()
 
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
@@ -219,13 +214,14 @@ class CaseStudy():
             print(f"File {json_filename} not found.")
             return None, None
         
-    def add_new_var_id(self, filepath):
+    def add_new_var_id(self):
         """
-        This function clearly needs a description. In essence it reads the new_variables.json and update var_i_d_days_i_t.json and updates the class attributes accordingly
-        It does so by taking into the account the dependencies of the new variables (to select the valid i_t) and points to the function that has to be called 
-        to load this variables. The loading func must be in utils.py (future Handler class)
-        input : filepath towards new_variables.json
-        output : list of new variables names for later usage, dict of dependencies by new var name for debugging, dict of functions to load by key new var names
+        Reads the new_variables in settings and update ditvi with them, updating the ditvi accordingly and also laoding the functions
+        that'll be stored in handler to load the variables.
+        output: 
+            new_var_names, basically their var_id
+            dependencies, a dict of keys new_var_names that will be the variables that must be loaded to compute the new one
+            functions, a dict of keys new_var_names that calls the function to load this var
         """
         def _update_ditvi(var_id, dependency):
             """
@@ -271,31 +267,38 @@ class CaseStudy():
                 self.days_i_t_per_var_id[var_id][date] = i_t_per_date[i]
             return self.days_i_t_per_var_id
 
-        try:
-            with open(filepath, 'r') as json_file:
-                data=json.load(json_file)
-                new_var_names = data.get("variables_id", []) # explicit, will be stored in same dir than other var_id
-                dependencies = data.get("dependencies", {}) # dependencies of these variables with available ones.
-                                                            # should also be used with a certain keyword for seg mask usage
-                functions = data.get("functions", {}) # the name of the functions in utils, that uses the dependent variables
-                                                      # from dependencies to compute the new one. Should clean RAM.
+        # loading from settings
+        new_var_names = self.settings["new_var"]["variables_id"]
+        dependencies = self.settings["new_var"]["dependencies"] # should also be used with a certain keyword for seg mask usage                                                     
+        functions = self.settings["new_var"]["functions"]
 
+        for var_id in new_var_names:
+            if var_id not in self.variables_names:
+                dependency = dependencies[var_id]
 
+                self.variables_names.append(var_id)
+                self.days_i_t_per_var_id = _update_ditvi(var_id, dependency)
+                if self.verbose : print(var_id, self.days_i_t_per_var_id[var_id].keys())
 
-                for var_id in new_var_names:
-                    if var_id not in self.variables_names:
-                        dependency = dependencies[var_id]
-
-                        self.variables_names.append(var_id)
-                        self.days_i_t_per_var_id = _update_ditvi(var_id, dependency)
-                        print(var_id, self.days_i_t_per_var_id[var_id].keys())
-
-                return new_var_names, dependencies, functions
-            
-        except FileNotFoundError:
-            print(f"File {filepath} not found. Very weird")
-            return None, None, None
+        return new_var_names, dependencies, functions
         
+    def skip_prec_i_t(self): 
+        """
+            Skip the i_t specified in settings
+            Only for "Prec" but it could be generalized to any variables 
+            Better to run a diagnostic within our module rather than passing the indexes
+            I'm not sure rn that the old i_t corresponds to mine now.
+        """
+
+        to_skip = self.settings["skip_prec_i_t"]
+        days = list(self.days_i_t_per_var_id['Prec'].keys())
+        for day in days:
+            indexes = self.days_i_t_per_var_id["Prec"][day]
+            for i_t in to_skip:
+                if i_t in indexes :
+                    self.days_i_t_per_var_id["Prec"][day].remove(i_t)
+        return self.days_i_t_per_var_id
+
 
             
         

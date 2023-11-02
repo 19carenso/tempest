@@ -7,11 +7,12 @@ import sys
 from math import log10
 from skimage import measure
 from scipy.optimize import curve_fit
-
+import warnings
 
 from .distribution import Distribution
 
 import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
 from .plots.plot2d import set_frame_invlog, show_joint_histogram
 
 class JointDistribution():
@@ -28,12 +29,19 @@ class JointDistribution():
         """
         
         # Inheritance by hand because __super__() speaks too much 
+        self.grid = grid
+
         self.name = grid.name
         self.settings = grid.settings
+        
         self.nd = nd
 
         self.ditvi = grid.days_i_t_per_var_id
+        
         self.prec = grid.get_var_id_ds("Prec")
+        
+        self.shape = np.shape(self.prec["mean_Prec"].to_numpy())
+        
         self.sample1 = self.prec["mean_Prec"].to_numpy().ravel()
         self.sample2 = self.prec["max_Prec"].to_numpy().ravel()
 
@@ -52,6 +60,8 @@ class JointDistribution():
 
         self.compute_distribution(self.sample1, self.sample2)
         self.compute_normalized_density(self.sample1, self.sample2)
+        
+        self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()      
     
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
@@ -243,21 +253,20 @@ class JointDistribution():
 
         self.norm_density = Norm * self.bincount
         
-    def compute_conditional_locations(self, sample1, sample2, data = None):
-                                          
-        shape1 = sample1.shape
-        shape2 = sample2.shape
+    def compute_conditional_locations(self):
             
-        digit1 = np.digitize(sample1.flatten(), self.bins1, right = True)
-        digit2 = np.digitize(sample2.flatten(), self.bins2, right = True)
+        digit1 = np.digitize(self.sample1, self.bins1, right = True)
+        digit2 = np.digitize(self.sample2, self.bins2, right = True)
         
-        digit1_3D = np.reshape(digit1,shape1)
-        digit2_3D = np.reshape(digit2,shape2)
+        digit1_3D = np.reshape(digit1,self.shape)
+        digit2_3D = np.reshape(digit2,self.shape)
         
         return digit1_3D,digit2_3D
         
     def compute_conditional_data_over_density(self, sample1, sample2, data = None):
-                                          
+        """
+        TODO
+        """                                
         digit1 = np.digitize(sample1.flatten(), self.bins1, right = True)
         digit2 = np.digitize(sample2.flatten(), self.bins2, right = True)
         
@@ -278,7 +287,9 @@ class JointDistribution():
             return data_over_density
         
     def compute_conditional_sum(self, sample1, sample2, data = None):
-                                          
+        """
+        TODO
+        """                        
         digit1 = np.digitize(sample1.flatten(), self.bins1, right = True)
         digit2 = np.digitize(sample2.flatten(), self.bins2, right = True)
         
@@ -406,3 +417,97 @@ class JointDistribution():
 
             # show 1-1 line
             ax_show.plot(x_branch_2,x_branch_2,'k--')
+            
+    def get_mask_yxt(self, d1, d2):
+        dj = self.joint_digit(d1, d2)
+        dj_3d = self.joint_digit(self.digit_3d_1, self.digit_3d_2)
+        
+        return dj_3d == dj
+        
+    def get_mask_yxt_from_mask_jdist(self, mask_jdist):
+        """
+        For each joint extreme in bin (i,j), return mask in the spatiotemporal domain.
+        """
+        
+        mask_yxt_all = False
+        i_j_mask = np.where(mask_jdist)
+        
+        for i,j in zip(i_j_mask[0],i_j_mask[1]):
+            mask_yxt = self.get_mask_yxt(i,j)
+            mask_yxt_all = np.logical_or(mask_yxt_all,mask_yxt)
+            
+        return mask_yxt_all
+
+    def get_coord_values(self, coordname):
+        """
+        I don't understand this func wery well, but it seems
+        to retrieve 
+        """
+        if coordname == 'lat':
+            x_native = self.grid.lat_centers
+            x_regrid = self.prec['lat_global'].values
+        elif coordname == 'lon':
+            x_native = self.grid.lon_centers
+            x_regrid = self.prec['lon_global'].values
+        
+        Nx = len(x_regrid)
+        x_bnds = np.round(x_native[0],2), np.round(x_native[-1],2)
+        dx = np.diff(x_bnds)/Nx
+
+        edges = np.arange(x_bnds[0],x_bnds[1]+dx,dx)
+        centers = np.convolve(edges,[0.5,0.5],'valid')
+        
+        return centers  
+
+    def make_map(self, mask_yxt):
+        ## image
+        # cmap = plt.cm.bone_r
+        # cmap = plt.cm.Blues
+        cmap = plt.cm.afmhot_r
+        # cmap_mcs = plt.cm.get_cmap('Accent', 10)
+
+        # compute figure size
+        dlon = np.diff((self.grid.lon_slice.start, self.grid.lon_slice.stop))[0] % 360
+        if dlon == 0: dlon = 360
+        dlat = np.diff((self.grid.lat_slice.start, self.grid.lat_slice.stop))[0]
+        Lx_fig = 15
+        Lx_cbar = 1.5
+        Ly_title = 1
+        Ly_fig = (Lx_fig-Lx_cbar)/dlon*dlat + Ly_title
+        print('figure size =',Lx_fig,Ly_fig)
+        
+        # initialize figure
+        fig = plt.figure(figsize=(Lx_fig,Ly_fig))
+        ax = plt.axes(projection=ccrs.PlateCarree(central_longitude=0))
+        
+        # coords
+        lat_1d = self.get_coord_values('lat')
+        lon_1d = self.get_coord_values('lon')
+        
+        lon_meshgrid, lat_meshgrid = np.meshgrid(lon_1d, lat_1d)
+        
+        # data
+        Z = np.sum(mask_yxt,axis=-1) # count
+        Next = np.sum(Z)
+        # show
+        # im = ax.pcolormesh(np.ravel(lonarray_dyamond),np.ravel(latarray_dyamond),np.ravel(Z),transform=ccrs.PlateCarree(),alpha=0.9,cmap=cmap)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            im = ax.pcolormesh(lon_meshgrid, lat_meshgrid, Z, transform=ccrs.PlateCarree(), alpha=0.9, cmap=cmap)
+        # im.set_clim(*clim)
+
+        ax.coastlines('110m')
+        ax.gridlines()
+        ax.text(0.01,0.05,"N = %d"%Next,transform=ax.transAxes)
+        
+        # Colorbar
+        x,y,w,h = ax.get_position().bounds
+        dx = w/60
+        cax = plt.axes([x+w+1.5*dx,y,dx,h])
+        cbar = fig.colorbar(im, cax=cax, orientation='vertical')
+        cbar.ax.set_ylabel('Bincount (#)')
+
+        return ax
+        
+        
+    

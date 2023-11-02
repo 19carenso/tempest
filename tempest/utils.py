@@ -7,14 +7,6 @@ import yaml
 import gc
 import xarray as xr
 
-## This is actually terrible, as it's already imported from main and should not differ afterwards
-## Hopefully for now it's only used by this load_seg func which is not called yet. 
-## Handler must be made before using load_seg...
-# settings_path = 'settings/settings.yaml'
-
-# with open(settings_path, 'r') as file:
-#     settings = yaml.safe_load(file)
-
 ## This function is specific to your REL_TABLE in settings
 def load_rel_table(file_path):
     """
@@ -114,7 +106,7 @@ def load_prec(grid, var_id, i_t):
     previous_precac = load_var(grid, 'Precac', i_t -1)
     current_precac = load_var(grid, 'Precac', i_t)
 
-    prec= previous_precac - current_precac
+    prec= current_precac - previous_precac
     del previous_precac
     del current_precac
     gc.collect()

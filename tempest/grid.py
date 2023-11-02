@@ -21,8 +21,8 @@ from .utils import load_var # All these imports could actually be resumed by imp
 
 class Grid(CaseStudy): 
     # except verbose i actually don't want any
-    def __init__(self, settings, fast = True, overwrite = True, verbose_steps = False, verbose=False):
-        super().__init__(settings, verbose = verbose)
+    def __init__(self, handler, fast = True, overwrite = True, verbose_steps = False, verbose=False):
+        super().__init__(handler, verbose = verbose)
         
         ## Get the region borders
         self.n_lat = self.lat_slice.stop - self.lat_slice.start
@@ -367,8 +367,8 @@ class Grid(CaseStudy):
 
         return ds
 
-
 ## Kinda an issue that there is 3 funcs to basically do the same thing
+## One will be removed when we get rid off the .pkl
 
     def compute_funcs_for_var_id(self, var_id='Prec'):
         """
@@ -415,7 +415,6 @@ class Grid(CaseStudy):
             var_ds.close()
         
         else : print("nothing to compute then")
-
 
     def regrid_funcs_and_save_by_day(self, day, var_id='Prec', funcs=['max', 'mean']):
         """
@@ -539,7 +538,7 @@ class Grid(CaseStudy):
 
         return day_per_func    
 
-### Functions add-ons for special regridding, built within class
+### Add-ons methods for special regridding, should be simplified to help users
 
     def spatial_mean_data_from_center_to_global(self, data_on_center):
         """
