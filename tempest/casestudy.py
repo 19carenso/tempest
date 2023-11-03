@@ -9,8 +9,7 @@ import json
 import numpy as np
 import datetime as dt
 import re
-
-from .utils import load_rel_table, extract_digit_after_sign
+import pandas as pd 
 
 from functools import reduce
 
@@ -21,54 +20,38 @@ class CaseStudy():
     """
         
     def __init__(self, handler, verbose = False, overwrite = False):
-        
-        self.settings = handler.settings
-
+        # Inherit lightly from handler
+        self.handler = handler
+        self.settings = self.handler.settings
+        # Bools
         self.verbose = verbose
-        
         self.overwrite = overwrite
-        
+        # Names and paths
         self.region = self.settings['REGION']
         self.model = self.settings['MODEL']
-        
-        self.name = '%s_%s' % (self.model, self.region)
-
+        self.name = f"{self.model}_{self.region}"
         self.data_in = self.settings['DIR_DATA_IN']
-        
-        self.rel_table = load_rel_table(self.settings['REL_TABLE'])
-        
         self.data_out = os.path.join(self.settings['DIR_DATA_OUT'], self.name)
-        
+        # Storm tracking paths in a pandas df
+        self.rel_table = self.handler.load_rel_table(self.settings['REL_TABLE'])
+        # Variables
         self._set_region_coord_and_period()
         
+
         #Maybe make a more robust intern function out of that 
+
+        self.initialized = False
         if not os.path.exists(self.data_out):
             os.makedirs(self.data_out)
             print(f"First instance of {self.name}. It's directory has been created at : {self.data_out}")
-            ## TODO create the nc
+            self._set_variables()
+        elif self.overwrite:
+            print(f"Overwriting the existing variables of {self.name} at {self.data_out}")
+            self._set_variables(overwrite = True)
+            self.overwrite = False
         else:
-            pass # nothing to say really , am I wrong? The thing is that because of grid.__super__() inheritance we reprint it it's boring... How to override that.
-            # print(f"Directory already exists: {self.data_out} \n")
-            ## load it. to it cleanly so read netcdf first 
-        
-        
-        ### Here we load the variables from the dir freshly createds
-        json_filename = 'var_id_days_i_t.json'
-        json_path = os.path.join(self.data_out, json_filename)
-        if not os.path.exists(json_path):
-            print("Json file of variables, days, i_t not found, so loading them...")
-            self.variables_names, self.days_i_t_per_var_id = self._load_var_id_in_data_in()
-            print(f"Variables data retrieved. Saving them in {json_path}")
-            self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
-        else :
-            # print('Found json file at {json_path}, loading it..')
-            self.variables_names, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
-
-        self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
-        self.days_i_t_per_var_id = self.skip_prec_i_t()
-        self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
-
-        if verbose : self._chek_variables_days_and_i_t()
+            #maybe check if the variables are well
+            pass        
 
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
@@ -104,6 +87,24 @@ class CaseStudy():
         self.lat_slice = slice(self.settings['BOX'][0], self.settings['BOX'][1])
         self.lon_slice = slice(self.settings['BOX'][2], self.settings['BOX'][3])
 
+    def _set_variables(self, overwrite):
+        json_filename = 'var_id_days_i_t.json'
+        json_path = os.path.join(self.data_out, json_filename)
+        if not os.path.exists(json_path) or overwrite:
+            print("Json file of variables, days, i_t not found, so building them...")
+            self.variables_names, self.days_i_t_per_var_id = self._load_var_id_in_data_in()
+            self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
+            self.days_i_t_per_var_id = self.skip_prec_i_t()
+            self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
+            print(f"Variables data retrieved. Saving them in {json_path}")
+            self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
+        else :
+            # print('Found json file at {json_path}, loading it..')
+            self.variables_names, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
+
+        if self.verbose : self._chek_variables_days_and_i_t()
+        
+
     def _load_var_id_in_data_in(self):
         """
         this functions loads the data from your DIR_DATA_IN settings
@@ -113,7 +114,7 @@ class CaseStudy():
         :return
             var_id: list of variables found
             days_i_t_per_var_id: a dictionnary that contains the days and correspong indexes per var_id    
-                            days_i_t_per_var_id[var_id] = tuple(list of days, dict of i_t per key the full datetime in format datetime.datetime(2016, 8, 31, 0, 0))
+                            days_i_t_per_var_id[var_id] = dict with keys the dates and values the indexes
         """
         dir = self.settings['DIR_DATA_IN']
         variables_id = []
@@ -245,7 +246,7 @@ class CaseStudy():
                 dindexes = []
                 for dvar_id in dependency:
                     if "-" in dvar_id:
-                        offset = extract_digit_after_sign(dvar_id)
+                        offset = self.handler.extract_digit_after_sign(dvar_id)
                         if i_date!= 0 : ## Ce n'est pas le 1er jour on peut récupérer celui d'avant
                             prev_date = dates[i_date-1]
                             prev_date_indexes = []
@@ -299,11 +300,19 @@ class CaseStudy():
                     self.days_i_t_per_var_id["Prec"][day].remove(i_t)
         return self.days_i_t_per_var_id
 
+    def add_storm_tracking_variables(self):
+        """
+        Could be a whole Class as there will  be a lot of future development
+        Add MCS_label to the variables, and update ditvi according to rel_table
+        """
+        # eazy time
+        self.variables_names.append("MCS_label")
 
-            
+        # I love SQL time
+        self.rel_table['Unnamed: 0.1'] = self.rel_table['Unnamed: 0.1'].astype(int)
+        self.rel_table['ditvi_date_key'] = pd.to_datetime(self.rel_table[['year', 'month', 'day']]).dt.strftime("%y-%m-%d")
+        # print(pd.to_datetime(self.rel_table[['year', 'month', 'day']]))
+        self.days_i_t_per_var_id["MCS_label"] = self.rel_table.groupby('ditvi_date_key')['Unnamed: 0.1'].apply(lambda group: group.tolist()).to_dict()
         
-
-
-# Example usage:
-# Load the data from "data.json"
-# loaded_variables_id, loaded_days_i_t_per_var_id = load_data_from_json("data.json")
+        return self.variables_names, self.days_i_t_per_var_id
+        #iterate over each rows of the pandas df rel_table

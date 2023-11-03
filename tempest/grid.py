@@ -17,7 +17,7 @@ from datetime import datetime as dt
 import matplotlib.pyplot as plt
 
 from .casestudy import CaseStudy
-from .utils import load_var # All these imports could actually be resumed by importing an instance of Handler
+
 
 class Grid(CaseStudy): 
     # except verbose i actually don't want any
@@ -421,6 +421,10 @@ class Grid(CaseStudy):
         Compute multiple functions on new grid for a given day
         Save it as a datarray under a pickle file
         """
+
+        ### TODO La simplification peut avoir lieu içi, on n'a plus besoin de pickle pour stocker les dataarrays,
+        ### on peut les stocker directement dans le dataset et ce servir de celui ci pour vérifier ce qu'il y a calculer.	
+
         outputs_da = [] ##Its a list of tuple (func, da_day_func_var_id)
         filename = f'{day}.pkl'  ## +26 meanPrecip and maxprecip computed for 40 days instead of 14
         filedirs = [os.path.join(os.getcwd() + self.settings["DIR_OUT"] + '/' + self.name, '%s_%s' % (str(func), var_id)) for func in funcs] #makes one directory per key. 
@@ -449,7 +453,7 @@ class Grid(CaseStudy):
 
         # save as pickle file in the directory ${func}_Prec
         # here us funcs_to_compute and filepaths to save them. 
-        for filepath, var_regridded, func in zip(filepaths_to_save, var_regridded_per_funcs, funcs_to_compute):
+        for filepath, var_regridded in zip(filepaths_to_save, var_regridded_per_funcs):
             with open(filepath, 'wb') as f:
                 da_day = xr.DataArray(var_regridded[0], dims=['lat_global', 'lon_global', 'days'], 
                                   coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
@@ -494,7 +498,7 @@ class Grid(CaseStudy):
                 list: A list of regridded data for each function in funcs_to_compute.
             """
             # Get the data for the day
-            var_current = load_var(self, var_id, i_t)
+            var_current = self.handler.load_var(self, var_id, i_t)
 
             # Compute each func(var) for the current time step
             results = []
@@ -513,30 +517,46 @@ class Grid(CaseStudy):
 
             return results
         
-        all_i_t_for_day_per_func = [[] for _ in funcs_to_compute]
+        if var_id == "MCS_label" :## MCS have a special treatment as they are the storm tracking inputs.
+                                  ## Any variable with MCS within should actually be treated differently.
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
 
-        for i_t in self.days_i_t_per_var_id[var_id][day]:
-            # Regrid time step for each func
-            results = regrid_single_time_step(i_t, var_id, funcs_to_compute)
-            for i_f, result in enumerate(results):
-                all_i_t_for_day_per_func[i_f].append(result)
+                var_day = []
+                for i_t in self.days_i_t_per_var_id[var_id][day]:
+                    var_day.append(self.handler.load_seg(i_t))
+                var_day = xr.concat(var_day,dim='time')
+                
+                labels_regrid = self.get_labels_data_from_center_to_global(var_day)
+                labels_regrid = np.expand_dims(labels_regrid, axis=3)
+                
+                return labels_regrid
 
-            del results
-            gc.collect()
+        else : 
+            # Loop over i_t, then loop over funcs_to_compute as to call regrid_single_time_step only once per i_t
+            all_i_t_for_day_per_func = [[] for _ in funcs_to_compute]
+            for i_t in self.days_i_t_per_var_id[var_id][day]:
+                # Regrid time step for each func
+                results = regrid_single_time_step(i_t, var_id, funcs_to_compute)
+                for i_f, result in enumerate(results):
+                    all_i_t_for_day_per_func[i_f].append(result)
 
-        # Stack and aggregate the data for each func
-        # This stacking-aggregation is dependent of funcs to compute,
-        # don't forget to modify this step if you're adding a new function 
-        # or to include it in the method/function... at day level then.
-        day_per_func = [[] for _ in funcs_to_compute]
+                del results
+                gc.collect()
 
-        for i_f, func in enumerate(funcs_to_compute):
-            stacked_array = np.stack(all_i_t_for_day_per_func[i_f], axis=0)
-            aggregated_array = getattr(np, 'nan%s' % func)(stacked_array, axis=0)
-            day_for_func = np.expand_dims(aggregated_array, axis = -1)
-            day_per_func[i_f].append(day_for_func)
+            # Stack and aggregate the data for each func
+            # This stacking-aggregation is dependent of funcs to compute,
+            # don't forget to modify this step if you're adding a new function 
+            # or to include it in the method/function... at day level then.
+            day_per_func = [[] for _ in funcs_to_compute]
 
-        return day_per_func    
+            for i_f, func in enumerate(funcs_to_compute):
+                stacked_array = np.stack(all_i_t_for_day_per_func[i_f], axis=0)
+                aggregated_array = getattr(np, 'nan%s' % func)(stacked_array, axis=0)
+                day_for_func = np.expand_dims(aggregated_array, axis = -1)
+                day_per_func[i_f].append(day_for_func)
+
+            return day_per_func    
 
 ### Add-ons methods for special regridding, should be simplified to help users
 
@@ -581,3 +601,48 @@ class Grid(CaseStudy):
         gc.collect()
         return X    
 
+    def get_labels_data_from_center_to_global(self, data_on_center):
+        """From segmentation mask, store 1 value of each label appearing at each location in new grid.
+        Input: daily-concatenated variable"""
+
+        n_MCS = 300 # new dimension size to store MCS labels
+        
+        x = data_on_center
+        X = np.full((self.n_lat, self.n_lon,n_MCS),np.nan)
+        # X_counts = np.full((self.n_lat, self.n_lon,n_MCS),np.nan)
+        
+        for i, slice_i_lat in enumerate(self.slices_i_lat):
+            
+            if i%10 == 0: print(i,end='..')
+            
+            for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
+                if self.verbose : print(slice_i_lat, slice_j_lon)
+
+                if not self.fast :
+                    x_subsets = [x[:,slice_i_lat, slice_j_lon],
+                             x[:,self.i_min[i,j], slice_j_lon]*self.alpha_i_min[i,j],
+                             x[:,self.i_max[i,j], slice_j_lon]*self.alpha_i_max[i,j],
+                             x[:,slice_i_lat, self.j_min[i,j]]*self.alpha_j_min[i,j],
+                             x[:,slice_i_lat, self.j_max[i,j]]*self.alpha_j_max[i,j],
+                             x[:,self.i_min[i,j], self.j_min[i,j]]*self.alpha_j_min[i,j]*self.alpha_i_min[i,j],
+                             x[:,self.i_min[i,j], self.j_max[i,j]]*self.alpha_j_max[i,j]*self.alpha_i_min[i,j],
+                             x[:,self.i_max[i,j], self.j_min[i,j]]*self.alpha_j_min[i,j]*self.alpha_i_max[i,j],
+                             x[:,self.i_max[i,j], self.j_max[i,j]]*self.alpha_j_max[i,j]*self.alpha_i_max[i,j]]
+                    
+                elif self.fast :
+                    x_subsets = [x[:,slice_i_lat, slice_j_lon]]
+                x_sub_unique = []
+                
+                for x_subset in x_subsets:
+                    
+                    arr = np.array(x_subset).flatten()
+                    
+                    unique, unique_counts = np.unique(arr[~np.isnan(arr)].astype(int),return_counts=True)
+                    x_sub_unique.append(unique)
+                
+                x_unique, x_counts = np.unique(np.hstack(x_sub_unique),return_counts=True)
+                n_labs = len(x_unique)
+                X[i, j,:n_labs] = x_unique
+                # X_counts[i,j,:n_labs] = x_counts # How to combine counts from counts ?? linear combination using return_counts, return_index? That should be doable
+                
+        return X#, X_counts

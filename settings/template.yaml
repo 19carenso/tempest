@@ -52,15 +52,18 @@ new_var: ## These list and dict must be sorted by dependency
          ## If y depends on x, x must be first in variables_id
   variables_id:
     [
-      "Prec"
+      "Prec", 
+      "MCS_label"
     ]
   dependencies:
     {
-      "Prec" : ["Precac", "Precac-1"]
+      "Prec" : ["Precac", "Precac-1"], 
+      "MCS_label" : []
     }
   functions:
     {
       "Prec" : "load_prec"
+      "MCS_label" : "load_seg" 
     }
 
 skip_prec_i_t : 
