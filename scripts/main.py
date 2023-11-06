@@ -8,7 +8,7 @@ from tempest import grid
 from tempest import handler
 from tempest import joint_distrib
 
-settings_path = 'settings/intro.yaml'
+settings_path = 'settings/tropics.yaml'
 
 workdir=os.getcwd()
 print(workdir)
@@ -25,6 +25,6 @@ if __name__ == '__main__':
     # for key, value in settings.items():
     #     print(f"{key}: {value}")
     # print(gr.days_i_t_per_var_id["MCS_label"])
-    gr.compute_funcs_for_var_id("MCS_label") ## by default calls var_id = 'Prec'
+    gr.compute_funcs_for_var_id() ## by default calls var_id = 'Prec'
     # jd = joint_distrib.JointDistribution(gr)
     # jd.get_mcs_bin_fraction()

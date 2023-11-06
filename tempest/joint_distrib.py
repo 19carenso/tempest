@@ -5,7 +5,7 @@ import sys
 
 
 from math import log10
-from skimage import measure
+from skimage import measure # pylance: disable=import-error 
 from scipy.optimize import curve_fit
 import warnings
 
@@ -63,7 +63,7 @@ class JointDistribution():
         
         self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()
         
-        #Check if the data is already stored
+        # Should check if regridded MCS labels is already stored in grid
         self.labels_regridded = grid.get_var_id_ds("MCS_label")["MCS_label"]
         self.labels_regridded_yxtm = np.swapaxes(self.labels_regridded,axis1=2,axis2=3).values # Est ce que ce ne serait pas intéressant de le construire comme ça direct ? 
         self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm),axis=3)
@@ -512,6 +512,8 @@ class JointDistribution():
         cbar.ax.set_ylabel('Bincount (#)')
 
         return ax
+
+## MCS labels
 
     def labels_in_mask_yxt(self, mask_yxt):
         """

@@ -262,7 +262,7 @@ class CaseStudy():
             
             self.days_i_t_per_var_id[var_id] = {}
             for i,date in enumerate(dates): 
-                self.days_i_t_per_var_id[var_id][date] = i_t_per_date[i]
+                self.days_i_t_per_var_id[var_id][date] = sorted(i_t_per_date[i])
             return self.days_i_t_per_var_id
 
         # loading from settings

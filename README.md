@@ -11,14 +11,6 @@ Tallying Engine for Multiscale Precipitation Events with Storm Tracking.
 
 pip install -r requirements.txt
 
-### Export the root project to your python path in .bashrc
-This helps a lot with all the imports
-
-run in the previous venv : 
-
-export PYTHONPATH=$PYTHONPATH:/path/to/your/project/root
-
-
 ### setup the environment by configuring settings/settings.yaml
 Recreate a .yaml for your own configuration. 
 Here is a guide on how to do it : 

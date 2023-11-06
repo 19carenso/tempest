@@ -102,7 +102,7 @@ class Handler():
                 load_func = getattr(self, grid.new_var_functions[var_id])
             else : print(f"Handler has no method {grid.new_var_functions[var_id]}")
 
-            da_new_var = load_func(grid, var_id, i_t)
+            da_new_var = load_func(grid, i_t)
             return da_new_var
             
         else : 
@@ -112,16 +112,16 @@ class Handler():
             da_var = xr.open_dataarray(filepath_var).load().sel(lon=grid.lon_slice,lat=grid.lat_slice)[0]
             return da_var
         
-    def load_prec(self, grid, var_id, i_t):
+    def load_prec(self, grid, i_t):
         """
         First handmade function (of I hope a long serie)
         These functions will typically be the kind of ones we'll add more and more 
         and invite people to add more and more. They must be quite independent of
         any other parts of TEMPEST naming conventions as they're by nature add-ons. 
         This is why I use very explicit variable names. 
-        Oh and they must clean their loadings as they'll be called a lot...
+        Oh and they must del their loadings as they'll be called a lot...
         """
-        dependency = grid.new_var_dependencies[var_id][0] # Returns 'Precac' only, could be called more simply
+
         previous_precac = self.load_var(grid, 'Precac', i_t -1)
         current_precac = self.load_var(grid, 'Precac', i_t)
 
