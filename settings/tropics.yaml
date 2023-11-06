@@ -62,7 +62,7 @@ new_var: ## These list and dict must be sorted by dependency
     }
   functions:
     {
-      "Prec" : "load_prec"
+      "Prec" : "load_prec",
       "MCS_label" : "load_seg" 
     }
 

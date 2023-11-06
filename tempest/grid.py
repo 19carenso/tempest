@@ -364,7 +364,6 @@ class Grid(CaseStudy):
             if missing_coordinates:
                 # Il est corrompu on dirait... ROBIN ALED
                 print(f"The dataset is missing the following coordinates: {missing_coordinates}")
-
         return ds
 
 ## Kinda an issue that there is 3 funcs to basically do the same thing
@@ -378,9 +377,7 @@ class Grid(CaseStudy):
         funcs = []
         keys = []
         keys_loaded = [key for key in list(var_ds.variables) if var_id in key] 
-        
-        # get the list of functions that have not been computed already and saved in var_ds 
-        # maybe a function to handle that, and the accrosingfuncs.json would be appropriate     
+          
         for func_name in self.func_names: # for now func_names is the same for all var_id, but it should be updated in a json to be in the same fashion that days_i_t_per_var_id
             key = '%s_%s'%(func_name,var_id)
             if key in keys_loaded : 
@@ -390,10 +387,15 @@ class Grid(CaseStudy):
                 continue
             else :
                 funcs.append(func_name) 
-                keys.append(key)
+                keys.append(key) 
         
-        if len(funcs)>0 : 
-            print(f"These keys : {keys} have to be loaded at .pkl level, or computed.")
+        if var_id == "MCS_label" : 
+            key = var_id
+            keys = [key]
+            funcs = [None]
+        
+        if len(keys)>0 or var_id == "MCS_label": 
+            print(f"These keys : {keys} have to be computed.")
             
             da_days_funcs = [[] for _ in funcs]
             days = list(self.days_i_t_per_var_id[var_id].keys())
@@ -407,6 +409,8 @@ class Grid(CaseStudy):
             for da_day, key in zip(da_days_funcs, keys) : 
             ## concat the list of dataarrays along days dimensions
                 da_var_regrid = xr.concat(da_day, dim = 'days')
+                ## By doing assign we actually keep the already existing variables of the netcdf
+                ## If we were adding specific days to already existing key, we should do it an other way.
                 var_ds = var_ds.assign(**{key: da_var_regrid})
             
             file = self.get_var_ds_file(var_id)
@@ -420,53 +424,23 @@ class Grid(CaseStudy):
         """
         Compute multiple functions on new grid for a given day
         Save it as a datarray under a pickle file
-        """
-
-        ### TODO La simplification peut avoir lieu içi, on n'a plus besoin de pickle pour stocker les dataarrays,
-        ### on peut les stocker directement dans le dataset et ce servir de celui ci pour vérifier ce qu'il y a calculer.	
+        """	
 
         outputs_da = [] ##Its a list of tuple (func, da_day_func_var_id)
-        filename = f'{day}.pkl'  ## +26 meanPrecip and maxprecip computed for 40 days instead of 14
-        filedirs = [os.path.join(os.getcwd() + self.settings["DIR_OUT"] + '/' + self.name, '%s_%s' % (str(func), var_id)) for func in funcs] #makes one directory per key. 
+
+        var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
         
-        ### !!!! ###
-        # realizes here, that in this case some combinaisons of func+variables will be unwanted #
-        # so they'll have to be sorted at key level ##
-        filepaths = []
-        for filedir in filedirs :
-            os.makedirs(filedir, exist_ok=True)
-            
-            filepaths.append(os.path.join(filedir, filename))
-
-        ## load it if it doesn't exist. Here should adapt funcs to load only those that are not saved.
-        to_compute_bool = np.array([not os.path.isfile(filepath) for filepath in filepaths])
-        print(to_compute_bool, funcs)
-        funcs_to_load = list(np.array(funcs)[~to_compute_bool])
-        funcs_to_compute = list(np.array(funcs)[to_compute_bool]) ## could be renamed funcs
-        
-        filepaths_to_load = list(np.array(filepaths)[~to_compute_bool])
-        filepaths_to_save = list(np.array(filepaths)[to_compute_bool])
-
-        # compute
-        print(f"compute {funcs_to_compute} for {var_id} at {day}")
-        var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs_to_compute)
-
-        # save as pickle file in the directory ${func}_Prec
-        # here us funcs_to_compute and filepaths to save them. 
-        for filepath, var_regridded in zip(filepaths_to_save, var_regridded_per_funcs):
-            with open(filepath, 'wb') as f:
+        for var_regridded in  var_regridded_per_funcs:
+            if var_id == 'MCS_label':  
+                n_MCS = var_regridded.shape[2]
+                da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'MCS', 'days'], 
+                                        coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'MCS':np.arange(n_MCS), 'days': [day]})
+                
+            else :
                 da_day = xr.DataArray(var_regridded[0], dims=['lat_global', 'lon_global', 'days'], 
-                                  coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
-                pickle.dump(da_day, f)
-                outputs_da.append(da_day)
-
-        print('%s already exists' % funcs_to_load)
-        # load as pickle file in the directory ${func}_Prec
-        # here use funcs_to_load, should be starting
-        for filepath, func in zip(filepaths_to_load, funcs_to_load) : 
-            with open(filepath, 'rb') as f:
-                da_day = pickle.load(f)
-                outputs_da.append(da_day)
+                                        coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
+            outputs_da.append(da_day)
+            
         del var_regridded_per_funcs
         gc.collect()
         
@@ -517,8 +491,9 @@ class Grid(CaseStudy):
 
             return results
         
-        if var_id == "MCS_label" :## MCS have a special treatment as they are the storm tracking inputs.
-                                  ## Any variable with MCS within should actually be treated differently.
+        if var_id == "MCS_label" :
+            ## MCS have a special treatment as they are the storm tracking inputs, they don't use regrid_single_time_step
+            ## Any variable with MCS within should actually be treated differently.
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
 
@@ -530,7 +505,7 @@ class Grid(CaseStudy):
                 labels_regrid = self.get_labels_data_from_center_to_global(var_day)
                 labels_regrid = np.expand_dims(labels_regrid, axis=3)
                 
-                return labels_regrid
+                return [labels_regrid] # we put it into a list so that it is the same fashion than over variables that could have multiple funcs
 
         else : 
             # Loop over i_t, then loop over funcs_to_compute as to call regrid_single_time_step only once per i_t
@@ -619,7 +594,7 @@ class Grid(CaseStudy):
                 if self.verbose : print(slice_i_lat, slice_j_lon)
 
                 if not self.fast :
-                    x_subsets = [x[:,slice_i_lat, slice_j_lon],
+                    x_subsets = [x[:,slice_i_lat, slice_j_lon], 
                              x[:,self.i_min[i,j], slice_j_lon]*self.alpha_i_min[i,j],
                              x[:,self.i_max[i,j], slice_j_lon]*self.alpha_i_max[i,j],
                              x[:,slice_i_lat, self.j_min[i,j]]*self.alpha_j_min[i,j],
@@ -630,7 +605,7 @@ class Grid(CaseStudy):
                              x[:,self.i_max[i,j], self.j_max[i,j]]*self.alpha_j_max[i,j]*self.alpha_i_max[i,j]]
                     
                 elif self.fast :
-                    x_subsets = [x[:,slice_i_lat, slice_j_lon]]
+                    x_subsets = [x[:,slice_i_lat, slice_j_lon]] # La 1ère dimension est celle du temps (i_t)
                 x_sub_unique = []
                 
                 for x_subset in x_subsets:

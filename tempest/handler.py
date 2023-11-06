@@ -17,11 +17,11 @@ class Handler():
 
     def load_seg(self, i_t):
         
-        path_dyamond = self.get_rootname_from_i_t(i_t)
-        path_toocan = self.rel_table.loc[self.rel_table['path_dyamond'] == path_dyamond, 'img_seg_path']
-        if len(path_toocan)==1 : path_toocan.values[0]
+        #path_dyamond = self.get_rootname_from_i_t(i_t)
+        path_toocan = self.rel_table.loc[self.rel_table['Unnamed: 0.1'] == i_t-1, 'img_seg_path']
+        if len(path_toocan)==1 : path_toocan = '/' + path_toocan.values[0]
         else : print('Rel_table has a problem')
-        img_toocan = xr.open_dataarray(path_toocan)
+        img_toocan = xr.open_dataarray(path_toocan, engine='netcdf4')
 
         ## MJC : I don't understand why you need to do this.
         # if self.settings['DIR_TOOCANSEG_DYAMOND'] is None: path_TOOCAN = full_path
@@ -45,6 +45,11 @@ class Handler():
         else : return None
 
     def get_rootname_from_i_t(self, i_t):
+        """
+        input: the i_t of the classical DYAMOND .nc data file, eg. 1441 (*240 = 345840)
+        output: data rootname eg. "DYAMOND_9216x4608x74_7.5s_4km_4608_0000345840"
+        """
+
         string_timestamp = str(int(int(i_t) * 240)).zfill(10)
         result = f"DYAMOND_9216x4608x74_7.5s_4km_4608_"+string_timestamp
         return result
@@ -69,6 +74,11 @@ class Handler():
 
     ## This method is specific to your TIME_RANGE and files in DIR_DATA_IN
     def extract_digit_after_sign(self, input_string):
+        """
+        Extract the digit after the sign in a string.
+        If the string does not contain a sign followed by a digit, return None.
+        """
+
         # Define a regular expression pattern to match the sign followed by a digit
         pattern = r'[+-]\d'
 
@@ -82,13 +92,16 @@ class Handler():
         else:
             return None
 
-    def load_var(self, grid, var_id, i_t): # the fact that we have to pass grid as an object justifies that 
-                                    # Handler class should be made and inherit from CaseStudy or even Grid.
+    def load_var(self, grid, var_id, i_t): 
+        """
+        Load a variable from a file.
+        If the variable is a new one, call the appropriate function.
+        """
         if var_id in grid.new_variables_names:
             if hasattr(self, grid.new_var_functions[var_id]):
                 load_func = getattr(self, grid.new_var_functions[var_id])
             else : print(f"Handler has no method {grid.new_var_functions[var_id]}")
-            
+
             da_new_var = load_func(grid, var_id, i_t)
             return da_new_var
             

@@ -40,18 +40,33 @@ class CaseStudy():
 
         #Maybe make a more robust intern function out of that 
 
-        self.initialized = False
         if not os.path.exists(self.data_out):
             os.makedirs(self.data_out)
             print(f"First instance of {self.name}. It's directory has been created at : {self.data_out}")
-            self._set_variables()
-        elif self.overwrite:
-            print(f"Overwriting the existing variables of {self.name} at {self.data_out}")
-            self._set_variables(overwrite = True)
-            self.overwrite = False
-        else:
-            #maybe check if the variables are well
-            pass        
+        self.variables_names, self.days_i_t_per_var_id, self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self._set_variables(self.overwrite)    
+
+    def _set_variables(self, overwrite):
+        json_filename = 'var_id_days_i_t.json'
+        json_path = os.path.join(self.data_out, json_filename)
+        if overwrite:
+            if not os.path.exists(json_path) : print("Json file of variables, of %s at %s days, i_t not found, so building them..."%(self.name, self.data_out))
+            if overwrite : print("Overwriting the existing variables of %s at %s"%(self.name, self.data_out))
+            self.variables_names, self.days_i_t_per_var_id = self._load_var_id_in_data_in()
+            self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
+            self.days_i_t_per_var_id = self.skip_prec_i_t()
+            self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
+            print(f"Variables data retrieved. Saving them in {json_path}")
+            self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
+        else :
+            # print('Found json file at {json_path}, loading it..')
+            self.variables_names, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
+            self.new_variables_names = self.settings["new_var"]["variables_id"],
+            self.new_var_dependencies = self.settings["new_var"]["dependencies"]
+            self.new_var_functions=  self.settings["new_var"]["functions"]
+            
+        if self.verbose : self._chek_variables_days_and_i_t()
+
+        return self.variables_names, self.days_i_t_per_var_id, self.new_variables_names, self.new_var_dependencies, self.new_var_functions
 
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
@@ -86,25 +101,7 @@ class CaseStudy():
         # BOX is [lat_min, lat_max, lon_min, lon_max]
         self.lat_slice = slice(self.settings['BOX'][0], self.settings['BOX'][1])
         self.lon_slice = slice(self.settings['BOX'][2], self.settings['BOX'][3])
-
-    def _set_variables(self, overwrite):
-        json_filename = 'var_id_days_i_t.json'
-        json_path = os.path.join(self.data_out, json_filename)
-        if not os.path.exists(json_path) or overwrite:
-            print("Json file of variables, days, i_t not found, so building them...")
-            self.variables_names, self.days_i_t_per_var_id = self._load_var_id_in_data_in()
-            self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
-            self.days_i_t_per_var_id = self.skip_prec_i_t()
-            self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
-            print(f"Variables data retrieved. Saving them in {json_path}")
-            self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
-        else :
-            # print('Found json file at {json_path}, loading it..')
-            self.variables_names, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
-
-        if self.verbose : self._chek_variables_days_and_i_t()
         
-
     def _load_var_id_in_data_in(self):
         """
         this functions loads the data from your DIR_DATA_IN settings
@@ -270,7 +267,7 @@ class CaseStudy():
 
         # loading from settings
         new_var_names = self.settings["new_var"]["variables_id"]
-        dependencies = self.settings["new_var"]["dependencies"] # should also be used with a certain keyword for seg mask usage                                                     
+        dependencies = self.settings["new_var"]["dependencies"]                                                     
         functions = self.settings["new_var"]["functions"]
 
         for var_id in new_var_names:
@@ -278,7 +275,8 @@ class CaseStudy():
                 dependency = dependencies[var_id]
 
                 self.variables_names.append(var_id)
-                self.days_i_t_per_var_id = _update_ditvi(var_id, dependency)
+                if len(dependency) > 0 : # If you add new variables that have no dependency you must create your own function to load them and update ditvi
+                    self.days_i_t_per_var_id = _update_ditvi(var_id, dependency)
                 if self.verbose : print(var_id, self.days_i_t_per_var_id[var_id].keys())
 
         return new_var_names, dependencies, functions
@@ -306,13 +304,14 @@ class CaseStudy():
         Add MCS_label to the variables, and update ditvi according to rel_table
         """
         # eazy time
-        self.variables_names.append("MCS_label")
+        if "MCS_label" not in self.variables_names:
+            self.variables_names.append("MCS_label")
 
         # I love SQL time
         self.rel_table['Unnamed: 0.1'] = self.rel_table['Unnamed: 0.1'].astype(int)
         self.rel_table['ditvi_date_key'] = pd.to_datetime(self.rel_table[['year', 'month', 'day']]).dt.strftime("%y-%m-%d")
         # print(pd.to_datetime(self.rel_table[['year', 'month', 'day']]))
-        self.days_i_t_per_var_id["MCS_label"] = self.rel_table.groupby('ditvi_date_key')['Unnamed: 0.1'].apply(lambda group: group.tolist()).to_dict()
+        self.days_i_t_per_var_id["MCS_label"] = self.rel_table.groupby('ditvi_date_key')['Unnamed: 0.1'].apply(lambda group: (group+1).tolist()).to_dict()
         
         return self.variables_names, self.days_i_t_per_var_id
         #iterate over each rows of the pandas df rel_table
