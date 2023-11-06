@@ -349,6 +349,7 @@ class Grid(CaseStudy):
     def get_var_id_ds(self, var_id):
         file = self.get_var_ds_file(var_id)
         if not os.path.exists(file):
+            print(f"\n Woah,\n the netcdf for this variable {var_id} didn't exist yet, let's make it from scratch : \n")
             dims_global = ['lat_global', 'lon_global', 'days']
             days = list(self.days_i_t_per_var_id[var_id].keys())
             coords_global = {'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': days}
@@ -389,6 +390,7 @@ class Grid(CaseStudy):
                 funcs.append(func_name) 
                 keys.append(key) 
         
+        # If var_id is MCS (or maybe later contains MCS) we override the funcs and keys to only compute the MCS_label
         if var_id == "MCS_label" : 
             key = var_id
             keys = [key]
@@ -423,7 +425,6 @@ class Grid(CaseStudy):
     def regrid_funcs_and_save_by_day(self, day, var_id='Prec', funcs=['max', 'mean']):
         """
         Compute multiple functions on new grid for a given day
-        Save it as a datarray under a pickle file
         """	
 
         outputs_da = [] ##Its a list of tuple (func, da_day_func_var_id)
@@ -499,12 +500,15 @@ class Grid(CaseStudy):
 
                 var_day = []
                 for i_t in self.days_i_t_per_var_id[var_id][day]:
-                    var_day.append(self.handler.load_seg(i_t))
+                    var_day.append(self.handler.load_seg(i_t)) # This loads quite a lot into memory. 
                 var_day = xr.concat(var_day,dim='time')
                 
                 labels_regrid = self.get_labels_data_from_center_to_global(var_day)
                 labels_regrid = np.expand_dims(labels_regrid, axis=3)
-                
+
+                del var_day 
+                gc.collect()
+
                 return [labels_regrid] # we put it into a list so that it is the same fashion than over variables that could have multiple funcs
 
         else : 

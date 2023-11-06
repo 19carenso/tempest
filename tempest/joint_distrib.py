@@ -61,8 +61,13 @@ class JointDistribution():
         self.compute_distribution(self.sample1, self.sample2)
         self.compute_normalized_density(self.sample1, self.sample2)
         
-        self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()      
-    
+        self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()
+        
+        #Check if the data is already stored
+        self.labels_regridded = grid.get_var_id_ds("MCS_label")["MCS_label"]
+        self.labels_regridded_yxtm = np.swapaxes(self.labels_regridded,axis1=2,axis2=3).values # Est ce que ce ne serait pas intéressant de le construire comme ça direct ? 
+        self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm),axis=3)
+             
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
         attribute value when its string fits is small enough."""
@@ -387,9 +392,7 @@ class JointDistribution():
         cmap = plt.cm.BrBG
 
         # -- Frame
-
         ax_show = ax.twinx().twiny()
-
         ax = set_frame_invlog(ax, self.dist1.ranks, self.dist2.ranks)
         ax.set_xlabel(r"1$^\circ\times 1$day extremes")
         ax.set_ylabel(r"4km-30mn extremes")
@@ -397,13 +400,14 @@ class JointDistribution():
 
         # -- Density
         pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
-        cont = measure.find_contours(Z, 1)
+        
 
         # -- Masks multiscale categories
         ax_show.imshow(self.mask_show.T,alpha=0.5,origin='lower')
 
         if branch : 
             # -- Branches
+            cont = measure.find_contours(Z, 1)
             N = 60
             # fit
             popt_1, x_1, y_1, popt_2, x_2, y_2, func = self._fit_branches(cont,N)
@@ -508,6 +512,137 @@ class JointDistribution():
         cbar.ax.set_ylabel('Bincount (#)')
 
         return ax
+
+    def labels_in_mask_yxt(self, mask_yxt):
+        """
+        For each joint extreme in mask for joint extremes, merge MCS labels occurring in their spatiotemporal occurrence.
+        LATER: also store their relative area.
+        """
+        if np.sum(mask_yxt) == 0:
+            labels = self.labels_regridded_yxtm[False]
+        else:
+            labels = self.labels_regridded_yxtm[mask_yxt]
+        unique_labels = np.unique(labels)
         
-        
+        return unique_labels
     
+    def labels_in_joint_bin(self, i_bin, j_bin):
+        """
+        For each joint extreme in bin (i,j), merge MCS labels occurring in their spatiotemporal occurrence.
+        LATER: also store their relative area.
+        """
+        mask_yxt = self.get_mask_yxt(i_bin,j_bin)
+        labels_i_j = self.labels_in_mask_yxt(mask_yxt)
+        return labels_i_j
+    
+    def count_mcs_in_jdist(self):
+        """
+        Return matrix of MCS counts in each bin of the joint distribution
+        """
+
+        N_i,N_j = self.bincount.shape
+        count_ij = np.full((N_i,N_j),np.nan)
+
+        for i_bin in range(N_i):
+            for j_bin in range(N_j):
+                # print(i_bin,j_bin)
+                labels_bin = self.labels_in_joint_bin(i_bin,j_bin)
+                labels_unique_bin = np.unique(labels_bin)
+                count_ij[i_bin,j_bin] = labels_unique_bin.size
+
+        return count_ij
+    
+    def get_mask_yxt_labels(self, labels):
+        """
+        Returns mask where these labels occur in x-y-t space
+        """
+        mask_all_labels = False
+        for label in labels:
+            mask_label = (self.labels_regridded_yxtm == label)
+            mask_all_labels = np.logical_or(mask_all_labels,mask_label)
+            
+        return mask_all_labels
+    
+    def get_mcs_bin_fraction(self):
+        n_i, n_j = self.bincount.shape
+        bin_fraction_mcs = np.full((n_i,n_j),np.nan)
+        bin_noise = np.full((n_i,n_j),np.nan)
+
+        for i_bin in range(n_i):
+            for j_bin in range(n_j):
+        
+                # where bin falls in x-y-t
+                mask_bin_yxt = self.get_mask_yxt(i_bin,j_bin)
+            
+                # where bin falls in x-y-t and MCS occurs
+                mask_bin_with_mcs_yxt = np.logical_and(mask_bin_yxt,self.mask_labels_regridded_yxt)
+                
+                # number of points in joint mask
+                count_bin_mcs = np.sum(mask_bin_with_mcs_yxt)
+                
+                # number of point in bin mask
+                count_bin = np.sum(mask_bin_yxt)
+                
+                # store this fraction
+                if count_bin >= 4:
+                    bin_fraction_mcs[i_bin,j_bin] = count_bin_mcs/count_bin
+                elif count_bin > 0:
+                    bin_noise[i_bin,j_bin] = 1
+                # include noisy points in bin_fraction_mcs
+                # if count_bin > 0:
+                #     bin_fraction_mcs[i_bin,j_bin] = count_bin_mcs/count_bin
+                #     if count_bin <= 4:
+                #         bin_noise[i_bin,j_bin] = 1
+        
+        # return this fraction
+        return bin_fraction_mcs, bin_noise
+
+    def plot_data(self, data, data_noise, branch):
+        self.make_mask()
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4.85))
+        
+        Z_nd = self.norm_density.T
+        Z = data.T
+        Z_noise = data_noise.T
+
+        # Should be passed as **kwargs
+        title = f"Data over Normalized density"
+        scale = 'linear'
+        vbds = (0., 1.)
+        cmap = plt.cm.RdBu_r
+
+        # -- Frame
+        ax_show = ax.twinx().twiny()
+        ax = set_frame_invlog(ax, self.dist1.ranks, self.dist2.ranks)
+        ax.set_xlabel(r"1$^\circ\times 1$day extremes")
+        ax.set_ylabel(r"4km-30mn extremes")
+        # ax.set_title(title)
+
+        # -- Density
+        pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
+        show_joint_histogram(ax_show, Z_noise, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, alpha=0.1)
+
+        # -- Colorbar
+        cb = fig.colorbar(pcm, ax=ax_show)
+        # cb.set_label('Normalized density')
+        cb.set_label('')
+        
+        # # -- Masks multiscale categories
+        # ax_show.imshow(self.mask_show.T,alpha=0.5,origin='lower')
+
+        if branch : 
+            # -- Branches
+            cont = measure.find_contours(Z, 1)
+            N = 60
+            # fit
+            popt_1, x_1, y_1, popt_2, x_2, y_2, func = self._fit_branches(cont,N)
+            x_branch_2 = y_branch_1 = np.linspace(2,45,45)
+            y_branch_2 = func(x_branch_2,*popt_2)
+            x_branch_1 = func(y_branch_1,*popt_1)
+
+            # show branches
+            ax_show.plot(x_branch_1,y_branch_1,'k--')
+            ax_show.plot(x_branch_2,y_branch_2,'k--')
+
+            # show 1-1 line
+            ax_show.plot(x_branch_2,x_branch_2,'k--')
