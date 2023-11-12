@@ -2,7 +2,7 @@ import numpy as np
 import os
 import time
 import sys
-
+import glob
 
 from math import log10
 from skimage import measure # pylance: disable=import-error 
@@ -10,8 +10,10 @@ from scipy.optimize import curve_fit
 import warnings
 
 from .distribution import Distribution
+from .load_toocan import load_toocan
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import cartopy.crs as ccrs
 from .plots.plot2d import set_frame_invlog, show_joint_histogram
 
@@ -20,7 +22,7 @@ class JointDistribution():
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, nd=4, overwrite=False):
+    def __init__(self, grid, nd=4, storm_tracking = False, overwrite=False):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -63,10 +65,15 @@ class JointDistribution():
         
         self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()
         
-        # Should check if regridded MCS labels is already stored in grid
-        self.labels_regridded = grid.get_var_id_ds("MCS_label")["MCS_label"]
-        self.labels_regridded_yxtm = np.swapaxes(self.labels_regridded,axis1=2,axis2=3).values # Est ce que ce ne serait pas intéressant de le construire comme ça direct ? 
-        self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm),axis=3)
+        if storm_tracking : 
+            # Should check if regridded MCS labels is already stored in grid
+            self.labels_regridded = grid.get_var_id_ds("MCS_label")["MCS_label"]
+            self.labels_regridded_yxtm = np.swapaxes(self.labels_regridded,axis1=2,axis2=3).values # Est ce que ce ne serait pas intéressant de le construire comme ça direct ? 
+            self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm),axis=3)
+
+            # get storm tracking data
+            self.storms, self.label_storms = self.load_storms_tracking()
+            self.labels_in_jdist = self.get_labels_in_jdist_bins(self)
              
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
@@ -500,10 +507,21 @@ class JointDistribution():
             im = ax.pcolormesh(lon_meshgrid, lat_meshgrid, Z, transform=ccrs.PlateCarree(), alpha=0.9, cmap=cmap)
         # im.set_clim(*clim)
 
+        # we draw coasts
         ax.coastlines('110m')
-        ax.gridlines()
-        ax.text(0.01,0.05,"N = %d"%Next,transform=ax.transAxes)
+        # Adding gridlines
+        gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.5, linestyle='--')
+        gl.xlocator = mticker.FixedLocator(range(-180, 181, 5))
+        gl.ylocator = mticker.FixedLocator(range(-90, 91, 5))
+        gl.top_labels = False  # Turn off labels on top x-axis
+        gl.right_labels = False  # Turn off labels on right y-axis
+        ax.set_xlabel('Longitude')
+        ax.set_ylabel('Latitude')
+
+        # add personal legend
+        ax.text(0.93,0.05,"N = %d"%Next,transform=ax.transAxes, fontsize = 9)
         
+
         # Colorbar
         x,y,w,h = ax.get_position().bounds
         dx = w/60
@@ -542,11 +560,11 @@ class JointDistribution():
         Return matrix of MCS counts in each bin of the joint distribution
         """
 
-        N_i,N_j = self.bincount.shape
-        count_ij = np.full((N_i,N_j),np.nan)
+        n_i,n_j = self.bincount.shape
+        count_ij = np.full((n_i,n_j),np.nan)
 
-        for i_bin in range(N_i):
-            for j_bin in range(N_j):
+        for i_bin in range(n_i):
+            for j_bin in range(n_j):
                 # print(i_bin,j_bin)
                 labels_bin = self.labels_in_joint_bin(i_bin,j_bin)
                 labels_unique_bin = np.unique(labels_bin)
@@ -648,3 +666,77 @@ class JointDistribution():
 
             # show 1-1 line
             ax_show.plot(x_branch_2,x_branch_2,'k--')
+
+    def load_storms_tracking(self):
+        paths = glob.glob(os.path.join(self.settings['DIR_STORM_TRACKING'], '*.gz'))
+        storms = load_toocan(paths[0])+load_toocan(paths[1])
+        label_storms = [storms[i].label for i in range(len(storms))]
+        return storms, label_storms
+    
+    def get_labels_in_jdist_bins(self, jdist):
+        """
+        Return matrix N_i,N_j,N_MCS of labels in each bin of the joint distribution
+        """
+        
+        n_i,n_j = jdist.bincount.shape
+        n_mcs = self.labels_regridded_yxtm.shape[3]
+        labels_ij = np.full((n_i,n_j, n_mcs),np.nan)
+        
+        for i_bin in range(n_i):
+            for j_bin in range(n_j):
+                
+                # print(i_bin,j_bin)
+                labels_bin = np.unique(self.labels_in_joint_bin(i_bin,j_bin))
+                # number of labels
+                n_labs = len(labels_bin)
+                n_store = min(n_mcs,n_labs)
+                # store
+                labels_ij[i_bin,j_bin,:n_store] = labels_bin[:n_store]
+                
+        return labels_ij
+    
+    def storm_attributes_on_jdist(self, attrs, funcs):
+        n_i, n_j = self.bincount.shape
+        if attrs.__class__ is str:
+            attrs = [attrs]
+        elif attrs.__class__ is not list:
+            attrs = list(attrs)
+        if funcs.__class__ is str:
+            funcs = [funcs]
+        elif funcs.__class__ is not list:
+            funcs = list(funcs)
+
+        n_attr = len(attr)
+        n_func = len(funcs)
+        out_ij = np.full((n_attr, n_func, n_i, n_j), np.nan)
+        keys = []
+
+        for i_bin in range(n_i):
+            if i_bin%1==0 : print(i_bin, end='')
+            for j_bin in range(n_j):
+                labels = self.labels_in_jdist[i_bin,j_bin]
+                labels = np.unique(labels[~np.isnan(labels)])
+
+                if len(labels)>1:
+                    i_labels = np.where(np.isin(self.label_storms,labels))[0] # Ben does not use his clean version of labels here.. ? 
+
+                    for i_attr, attr in enumerate(attrs):
+                        for i_func, f in enumerate(funcs):
+                            key = f"{f}_{attr}"
+                            if key not in keys: keys.append(key)
+
+                        if attr in self.storms[0].__dict__.keys():
+                            attr_list = [getattr(self.storms[i],attr) for i in i_labels]
+                        elif attr in self.storms[0].clusters.__dict__.keys():
+                            attr_list = [np.mean(getattr(self.storms[i].clusters,attr)) for i in i_labels]
+
+                        if len(attr_list) > 0:
+                            try:
+                                out_ij[i_attr,i_func,i_bin,j_bin] = getattr(np,'nan%s'%f)(attr_list)
+                            except ValueError:
+                                print(key)
+                                print(len(labels))
+                                print(attr_list)
+                                print("Oops!  That was no valid number.  Try again...")
+
+        return out_ij, keys

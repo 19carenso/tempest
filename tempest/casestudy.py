@@ -60,7 +60,7 @@ class CaseStudy():
         else :
             # print('Found json file at {json_path}, loading it..')
             self.variables_names, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
-            self.new_variables_names = self.settings["new_var"]["variables_id"],
+            self.new_variables_names = self.settings["new_var"]["variables_id"]
             self.new_var_dependencies = self.settings["new_var"]["dependencies"]
             self.new_var_functions=  self.settings["new_var"]["functions"]
             

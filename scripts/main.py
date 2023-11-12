@@ -8,7 +8,7 @@ from tempest import grid
 from tempest import handler
 from tempest import joint_distrib
 
-settings_path = 'settings/tropics.yaml'
+settings_path = 'settings/ep_itcz.yaml'
 
 workdir=os.getcwd()
 print(workdir)

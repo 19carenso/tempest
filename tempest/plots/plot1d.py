@@ -103,7 +103,7 @@ def set_frame(ax,rankmin=0,rankmax=99.99,axisIL='x',xtickrotation=0):
         
     return ax_frame
     
-def show_data(ax,ranks,values,axisIL='x',rankmin=0,rankmax=99.99,**kwargs):
+def show_data(ax,ranks,values,axisIL='x',rankmin=0,rankmax=99.99, invert = False, **kwargs):
     """Show data as it is, regardless of preset frame and ticks"""
 
     if axisIL == 'x':
@@ -114,8 +114,15 @@ def show_data(ax,ranks,values,axisIL='x',rankmin=0,rankmax=99.99,**kwargs):
             xmin = 1/(1-rankmin/100.)
         if rankmax is not None:
             xmax = 1/(1-rankmax/100.)
+            
+        if invert : 
+        # Set the x-axis on the right and invert its direction
+            ax = ax.twinx()
+            h = ax.plot(x, values, **kwargs)
         # show
-        h = ax.plot(x,values,**kwargs)
+        else : 
+            h = ax.plot(x,values,**kwargs)
+            
         # be careful that the x bounds are precisely the same as the background frame
         ax.margins(x=0)
         # bounds
@@ -126,7 +133,7 @@ def show_data(ax,ranks,values,axisIL='x',rankmin=0,rankmax=99.99,**kwargs):
         ax.set_xticks([])
         ax.set_xticks([], minor=True)
         
-        return h
+        return h, ax
 
     elif axisIL == 'y':
         

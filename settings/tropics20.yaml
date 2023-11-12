@@ -1,0 +1,71 @@
+# Description: settings for using Tempest
+# Author: Maxime Carenso 
+# Ideally you want one settings file per project
+
+# Basic Settings
+MODEL: 'DYAMOND_SAM'
+REGION: 'Tropics'
+
+# Inner paths 
+# I think that ../ should always led to root of the project
+DIR_INPUT: '/input' 
+DIR_FIG: '/figures' 
+DIR_OUT: '/output' 
+DIR_TEMPDATA: '/cache'
+
+# Where we store the data we need for the analysis, independant of model_region
+DIR_DATA_OUT: '/homedata/mcarenso/tempest'
+
+# Data that are too big to be stored in your workspace
+DIR_DATA_IN: '/bdd/DYAMOND/SAM-4km/OUT_2D'
+DIR_DATA2: '/homedata/mcarenso/DYAMOND_REGIONS/tropics/SAM/diagnostics_2D'
+
+DIR_TOOCANSEG_DYAMOND: null #??
+DIR_STORM_TRACKING: '/data/fiolleau/DYAMOND/TOOCAN/TOOCAN_v2.07/GLOBAL/2016/FileTracking'
+REL_TABLE: "input/relation_2_table_UTC_dyamond_segmentation.csv"
+
+
+
+# Colors and Bounds
+clim_specs:
+  prec: [1e-2, 1e2]  # mm (in 30mn)
+  PW: [10, 70]  # mm
+
+cmap_specs:
+  prec: 'plt.cm.ocean_r'  # alternative plt.cm.bone_r
+  PW: 'plt.cm.RdBu'
+  mcs: 'plt.cm.get_cmap("Accent", 10)'
+
+norm_specs:
+  prec:
+    type: LogNorm
+    vmin: 0.01
+    vmax: 100.0
+  PW: null
+
+# Regions of Analysis
+BOX: [-20, 20, 0, 360] # [lat_min, lat_max, lon_min, lon_max]
+TIME_RANGE: [832, 1917] # [start, end] in timestep (so rows) of dir_data_in
+# Box corresponds to the inedx [[2304, 3840], [7936, 8704]] in DYAMOND_SAM data
+
+new_var: ## These list and dict must be sorted by dependency
+         ## If y depends on x, x must be first in variables_id
+  variables_id:
+    [
+      "Prec", 
+      "MCS_label"
+    ]
+  dependencies:
+    {
+      "Prec" : ["Precac", "Precac-1"], 
+      "MCS_label" : []
+    }
+  functions:
+    {
+      "Prec" : "load_prec",
+      "MCS_label" : "load_seg" 
+    }
+
+# there should be a function to assert that. 
+skip_prec_i_t : 
+  [491, 505, 862,  863,  958,  959, 1054, 1055, 1150, 1151, 1246, 1247, 1342, 1343, 1438, 1439, 1534, 1535, 1630, 1631, 1726, 1727, 1822, 1823] 
