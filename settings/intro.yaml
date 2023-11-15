@@ -14,14 +14,10 @@ DIR_OUT: '/output'
 DIR_TEMPDATA: '/cache'
 
 # Where we store the data we need for the analysis, independant of model_region
-DIR_DATA_OUT: 'input/intro'
+DIR_DATA_OUT: 'output/intro'
 
 # Data that are too big to be stored in your workspace
 DIR_DATA_IN: 'input/intro/data' ## This is an extract made by /home/mcarenso/code/tempest/tests/intro/extract_data.py
-
-# This is typically why I think we need to be flexible in the loading of data
-# But it currently only works with the Dyamond SAM filenames..
-# That is all contained in CaseStudy._load_var_id_in_data_in
 DIR_DATA2: '/homedata/mcarenso/DYAMOND_REGIONS/tropics/SAM/diagnostics_2D'
 
 DIR_TOOCANSEG_DYAMOND: null #??
@@ -50,7 +46,7 @@ norm_specs:
 # For intro file, these must be used differently as data as already been extracted
 # as to match these exactly. 
 BOX: [0, 20, 310, 340] # [lat_min, lat_max, lon_min, lon_max]
-TIME_RANGE: [1440, 1488] # [start, end] in i_t, converted in corresponding timestamps to fetch from dir_data_in by *240
+TIME_RANGE: [1445, 1488] # [start, end] in i_t, converted in corresponding timestamps to fetch from dir_data_in by *240
 # Box corresponds to the index [[2304, 3840], [7936, 8704]] in DYAMOND_SAM data except that 3840 is excessive
 
 new_var: ## These list and dict must be sorted by dependency
@@ -72,5 +68,4 @@ new_var: ## These list and dict must be sorted by dependency
     }
 
 skip_prec_i_t : 
-  [491, 505, 862,  863,  958,  959, 1054, 1055, 1150, 1151, 1246, 1247, 1342, 1343, 1438, 1439, 1534, 1535, 1630, 1631, 1726, 1727, 1822, 1823] 
-
+  [1450, 1486]

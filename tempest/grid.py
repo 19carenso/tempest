@@ -30,7 +30,6 @@ class Grid(CaseStudy):
         
         ## Bool for running a quicker computation (can multiply by x2 or x8 depending on the function)
         self.fast = fast
-
         
         ## explicitly verbose
         self.verbose = verbose
@@ -45,21 +44,16 @@ class Grid(CaseStudy):
         self.func_names = ['max', 'mean']
 
     def make_output_ready(self, overwrite):
-        self.path_out = os.getcwd() + self.settings["DIR_OUT"] + '/' + self.name 
-        if not os.path.exists(self.path_out):
+        filepath= os.path.join(self.data_out, "grid_attributes.pkl")
+        if not os.path.exists(filepath):
             self.overwrite = True
         else : self.overwrite = overwrite 
 
         if self.overwrite:
-            self._prepare_grid()
-            if not os.path.exists(self.path_out):
-                os.makedirs(self.path_out)
-
-            filename = self.path_out + '/grid_attributes.pkl'
-            self.save_grid_attr(filename)
+            self._prepare_grid()    
+            self.save_grid_attr(filepath)
         else :
-            filename = self.path_out + '/grid_attributes.pkl'
-            self.load_grid_attr(filename)
+            self.load_grid_attr(filepath)
 
     def save_grid_attr(self, filename):
         state = {attr: getattr(self, attr) for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")}

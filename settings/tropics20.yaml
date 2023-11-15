@@ -4,7 +4,7 @@
 
 # Basic Settings
 MODEL: 'DYAMOND_SAM'
-REGION: 'Tropics'
+REGION: 'Tropics20'
 
 # Inner paths 
 # I think that ../ should always led to root of the project

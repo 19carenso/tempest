@@ -48,9 +48,9 @@ class CaseStudy():
     def _set_variables(self, overwrite):
         json_filename = 'var_id_days_i_t.json'
         json_path = os.path.join(self.data_out, json_filename)
-        if overwrite:
-            if not os.path.exists(json_path) : print("Json file of variables, of %s at %s days, i_t not found, so building them..."%(self.name, self.data_out))
-            if overwrite : print("Overwriting the existing variables of %s at %s"%(self.name, self.data_out))
+        if overwrite or not os.path.exists(json_path):
+            if not os.path.exists(json_path) : print(f"Creation of {json_path}")
+            if overwrite : print(f"Overwriting the existing variables in {json_path}")
             self.variables_names, self.days_i_t_per_var_id = self._load_var_id_in_data_in()
             self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
             self.days_i_t_per_var_id = self.skip_prec_i_t()
@@ -58,7 +58,7 @@ class CaseStudy():
             print(f"Variables data retrieved. Saving them in {json_path}")
             self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
         else :
-            # print('Found json file at {json_path}, loading it..')
+            print('Found json file at {json_path}, loading it..')
             self.variables_names, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
             self.new_variables_names = self.settings["new_var"]["variables_id"]
             self.new_var_dependencies = self.settings["new_var"]["dependencies"]
@@ -214,7 +214,7 @@ class CaseStudy():
         
     def add_new_var_id(self):
         """
-        Reads the new_variables in settings and update ditvi with them, updating the ditvi accordingly and also laoding the functions
+        Reads the new_variables in settings and update ditvi with them, updating the ditvi accordingly and also loading the functions
         that'll be stored in handler to load the variables.
         output: 
             new_var_names, basically their var_id
@@ -259,7 +259,6 @@ class CaseStudy():
                         dindexes.append(list(self.days_i_t_per_var_id[dvar_id][date]))
                 i_t_per_date.append(reduce(lambda x, y: list(set(x) & set(y)), dindexes))
 
-            
             self.days_i_t_per_var_id[var_id] = {}
             for i,date in enumerate(dates): 
                 self.days_i_t_per_var_id[var_id][date] = sorted(i_t_per_date[i])
@@ -274,8 +273,9 @@ class CaseStudy():
             if var_id not in self.variables_names:
                 dependency = dependencies[var_id]
 
-                self.variables_names.append(var_id)
-                if len(dependency) > 0 : # If you add new variables that have no dependency you must create your own function to load them and update ditvi
+                if var_id not in self.variables_names: self.variables_names.append(var_id)
+                if len(dependency) > 0 : # If you add new variables that have no dependency you must create your own function to load them 
+                                         # and update ditvi like with add_storm_tracking_variables
                     self.days_i_t_per_var_id = _update_ditvi(var_id, dependency)
                 if self.verbose : print(var_id, self.days_i_t_per_var_id[var_id].keys())
 
@@ -285,33 +285,50 @@ class CaseStudy():
         """
             Skip the i_t specified in settings
             Only for "Prec" but it could be generalized to any variables 
-            Better to run a diagnostic within our module rather than passing the indexes
-            I'm not sure rn that the old i_t corresponds to mine now.
         """
 
         to_skip = self.settings["skip_prec_i_t"]
+        i_min = self.settings["TIME_RANGE"][0]
         days = list(self.days_i_t_per_var_id['Prec'].keys())
+        
         for day in days:
             indexes = self.days_i_t_per_var_id["Prec"][day]
+            is_inf = True
+            print(f"skipping i_t for day {day}")
+            for idx in indexes:
+                if idx >= i_min : 
+                    is_inf = False
+                elif idx < i_min : 
+                    self.days_i_t_per_var_id["Prec"][day].remove(idx)
+                
             for i_t in to_skip:
-                if i_t in indexes :
+                if i_t in indexes:
                     self.days_i_t_per_var_id["Prec"][day].remove(i_t)
+                    
+            if is_inf :
+                del self.days_i_t_per_var_id['Prec'][day]
+            
         return self.days_i_t_per_var_id
 
-    def add_storm_tracking_variables(self):
+    def add_storm_tracking_variables(self, vanilla = False):
         """
         Could be a whole Class as there will  be a lot of future development
         Add MCS_label to the variables, and update ditvi according to rel_table
         """
-        # eazy time
         if "MCS_label" not in self.variables_names:
             self.variables_names.append("MCS_label")
 
-        # I love SQL time
-        self.rel_table['Unnamed: 0.1'] = self.rel_table['Unnamed: 0.1'].astype(int)
-        self.rel_table['ditvi_date_key'] = pd.to_datetime(self.rel_table[['year', 'month', 'day']]).dt.strftime("%y-%m-%d")
-        # print(pd.to_datetime(self.rel_table[['year', 'month', 'day']]))
-        self.days_i_t_per_var_id["MCS_label"] = self.rel_table.groupby('ditvi_date_key')['Unnamed: 0.1'].apply(lambda group: (group+1).tolist()).to_dict()
-        
-        return self.variables_names, self.days_i_t_per_var_id
-        #iterate over each rows of the pandas df rel_table
+        if vanilla :
+            # I love SQL time
+            self.rel_table['Unnamed: 0.1'] = self.rel_table['Unnamed: 0.1'].astype(int)
+            self.rel_table['ditvi_date_key'] = pd.to_datetime(self.rel_table[['year', 'month', 'day']]).dt.strftime("%y-%m-%d")
+            # print(pd.to_datetime(self.rel_table[['year', 'month', 'day']]))
+            self.days_i_t_per_var_id["MCS_label"] = self.rel_table.groupby('ditvi_date_key')['Unnamed: 0.1'].apply(lambda group: (group+1).tolist()).to_dict()
+            
+            return self.variables_names, self.days_i_t_per_var_id
+        else :
+            ## I have a feeling that joint distrib doesn't work well otherwise but to check
+            self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id["Prec"]
+
+            return self.variables_names, self.days_i_t_per_var_id
+
