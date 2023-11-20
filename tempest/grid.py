@@ -22,7 +22,7 @@ from .casestudy import CaseStudy
 class Grid(CaseStudy): 
     # except verbose i actually don't want any
     def __init__(self, handler, fast = True, overwrite = True, verbose_steps = False, verbose=False):
-        super().__init__(handler, verbose = verbose)
+        super().__init__(handler, overwrite = False, verbose = False)
         
         ## Get the region borders
         self.n_lat = self.lat_slice.stop - self.lat_slice.start
@@ -396,6 +396,7 @@ class Grid(CaseStudy):
             da_days_funcs = [[] for _ in funcs]
             days = list(self.days_i_t_per_var_id[var_id].keys())
             for day in days:
+                print(f"computing day {day}")
                 da_funcs = self.regrid_funcs_and_save_by_day(day, var_id, funcs)
                 for i, da_func in enumerate(da_funcs):
                     da_days_funcs[i].append(da_func)
@@ -551,8 +552,6 @@ class Grid(CaseStudy):
         if not self.fast : alpha_max = self.__build_alpha_max__()
         for i, slice_i_lat in enumerate(self.slices_i_lat):
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
-                if self.verbose : 
-                    print(slice_i_lat, slice_j_lon)
                 if not self.fast :
                     m = np.nanmax(x[slice_i_lat, slice_j_lon].flatten())
                     b = np.nanmax((x[self.i_min[i,j], slice_j_lon]*alpha_max[self.i_min[i,j], slice_j_lon]).flatten())
@@ -589,7 +588,6 @@ class Grid(CaseStudy):
             if i%10 == 0: print(i,end='..')
             
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
-                if self.verbose : print(slice_i_lat, slice_j_lon)
 
                 if not self.fast :
                     x_subsets = [x[:,slice_i_lat, slice_j_lon], 

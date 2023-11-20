@@ -617,7 +617,7 @@ class JointDistribution():
         # return this fraction
         return bin_fraction_mcs, bin_noise
 
-    def plot_data(self, data, data_noise, branch):
+    def plot_data(self, data, data_noise, cmap = plt.cm.RdBu_r, branch = False, label = ''):
         self.make_mask()
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4.85))
         
@@ -628,8 +628,8 @@ class JointDistribution():
         # Should be passed as **kwargs
         title = f"Data over Normalized density"
         scale = 'linear'
-        vbds = (0., 1.)
-        cmap = plt.cm.RdBu_r
+        vbds = (None, None)
+        cmap = cmap
 
         # -- Frame
         ax_show = ax.twinx().twiny()
@@ -645,7 +645,7 @@ class JointDistribution():
         # -- Colorbar
         cb = fig.colorbar(pcm, ax=ax_show)
         # cb.set_label('Normalized density')
-        cb.set_label('')
+        cb.set_label(label)
         
         # # -- Masks multiscale categories
         # ax_show.imshow(self.mask_show.T,alpha=0.5,origin='lower')
@@ -706,7 +706,7 @@ class JointDistribution():
         elif funcs.__class__ is not list:
             funcs = list(funcs)
 
-        n_attr = len(attr)
+        n_attr = len(attrs)
         n_func = len(funcs)
         out_ij = np.full((n_attr, n_func, n_i, n_j), np.nan)
         keys = []

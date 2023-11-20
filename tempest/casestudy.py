@@ -44,7 +44,7 @@ class CaseStudy():
             os.makedirs(self.data_out)
             print(f"First instance of {self.name}. It's directory has been created at : {self.data_out}")
         self.variables_names, self.days_i_t_per_var_id, self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self._set_variables(self.overwrite)    
-
+        
     def _set_variables(self, overwrite):
         json_filename = 'var_id_days_i_t.json'
         json_path = os.path.join(self.data_out, json_filename)
@@ -277,7 +277,6 @@ class CaseStudy():
                 if len(dependency) > 0 : # If you add new variables that have no dependency you must create your own function to load them 
                                          # and update ditvi like with add_storm_tracking_variables
                     self.days_i_t_per_var_id = _update_ditvi(var_id, dependency)
-                if self.verbose : print(var_id, self.days_i_t_per_var_id[var_id].keys())
 
         return new_var_names, dependencies, functions
         
@@ -286,28 +285,21 @@ class CaseStudy():
             Skip the i_t specified in settings
             Only for "Prec" but it could be generalized to any variables 
         """
-
         to_skip = self.settings["skip_prec_i_t"]
-        i_min = self.settings["TIME_RANGE"][0]
+        i_min, i_max = self.settings["TIME_RANGE"][0], self.settings["TIME_RANGE"][1] 
         days = list(self.days_i_t_per_var_id['Prec'].keys())
         
         for day in days:
             indexes = self.days_i_t_per_var_id["Prec"][day]
-            is_inf = True
-            print(f"skipping i_t for day {day}")
-            for idx in indexes:
-                if idx >= i_min : 
-                    is_inf = False
-                elif idx < i_min : 
-                    self.days_i_t_per_var_id["Prec"][day].remove(idx)
-                
-            for i_t in to_skip:
-                if i_t in indexes:
-                    self.days_i_t_per_var_id["Prec"][day].remove(i_t)
-                    
-            if is_inf :
-                del self.days_i_t_per_var_id['Prec'][day]
-            
+            filtered_indexes = [idx for idx in indexes if (idx >= i_min) and (idx<=i_max)]
+            if len(filtered_indexes) == 0 : del self.days_i_t_per_var_id["Prec"][day]
+            else : 
+                for i_t in to_skip:
+                    if i_t in filtered_indexes:
+                        filtered_indexes.remove(i_t)
+                if len(filtered_indexes)==0 : del self.days_i_t_per_var_id["Prec"][day]
+                else : self.days_i_t_per_var_id["Prec"][day] = filtered_indexes             
+
         return self.days_i_t_per_var_id
 
     def add_storm_tracking_variables(self, vanilla = False):

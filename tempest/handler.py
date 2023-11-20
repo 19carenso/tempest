@@ -31,6 +31,14 @@ class Handler():
         #     path_TOOCAN = os.path.join(self.settings['DIR_TOOCANSEG_DYAMOND'],date,filename)
             
         return img_toocan
+    
+    def i_t_from_utc(self, utc):
+        #path_dyamond = self.get_rootname_from_i_t(i_t)
+        i_t = self.rel_table.loc[self.rel_table["UTC"] == utc, 'Unnamed: 0'].values
+        if len(i_t)!=1 : print("issue with utc, i_t correspondance in relation table")
+        else :
+            i_t = int(i_t[0]+1)
+        return i_t
 
     def get_timestamp_from_filename(self, filename):
         """
@@ -130,5 +138,4 @@ class Handler():
         del current_precac
         gc.collect()
         return prec
-    
     
