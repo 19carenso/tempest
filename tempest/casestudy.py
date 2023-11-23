@@ -10,7 +10,7 @@ import numpy as np
 import datetime as dt
 import re
 import pandas as pd 
-
+import yaml
 from functools import reduce
 
 class CaseStudy():
@@ -22,7 +22,9 @@ class CaseStudy():
     def __init__(self, handler, verbose = False, overwrite = False):
         # Inherit lightly from handler
         self.handler = handler
-        self.settings = self.handler.settings
+        with open(self.handler.settings_path, 'r') as file:
+            self.settings = yaml.safe_load(file)
+            
         # Bools
         self.verbose = verbose
         self.overwrite = overwrite
@@ -58,7 +60,7 @@ class CaseStudy():
             print(f"Variables data retrieved. Saving them in {json_path}")
             self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
         else :
-            print('Found json file at {json_path}, loading it..')
+            if self.verbose : print(f'Found json file at {json_path}, loading it..')
             self.variables_names, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
             self.new_variables_names = self.settings["new_var"]["variables_id"]
             self.new_var_dependencies = self.settings["new_var"]["dependencies"]

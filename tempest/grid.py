@@ -19,14 +19,14 @@ import matplotlib.pyplot as plt
 from .casestudy import CaseStudy
 
 
-class Grid(CaseStudy): 
+class Grid(): 
     # except verbose i actually don't want any
-    def __init__(self, handler, fast = True, overwrite = True, verbose_steps = False, verbose=False):
-        super().__init__(handler, overwrite = False, verbose = False)
+    def __init__(self, casestudy, fast = True, overwrite = True, verbose_steps = False, verbose=False):
+        self.casestudy = casestudy
         
         ## Get the region borders
-        self.n_lat = self.lat_slice.stop - self.lat_slice.start
-        self.n_lon = self.lon_slice.stop - self.lon_slice.start
+        self.n_lat = self.casestudy.lat_slice.stop - self.casestudy.lat_slice.start
+        self.n_lon = self.casestudy.lon_slice.stop - self.casestudy.lon_slice.start
         
         ## Bool for running a quicker computation (can multiply by x2 or x8 depending on the function)
         self.fast = fast
@@ -38,13 +38,15 @@ class Grid(CaseStudy):
         self.verbose_steps = verbose_steps
 
         self.make_output_ready(overwrite)
-
+        
         # Funcs to compute on variable 
         # Actually this should be done in CaseStudy and passed there, so that it'd be eazy to control which func for any var_id
         self.func_names = ['max', 'mean']
 
+        self.settings = casestudy.settings
+        
     def make_output_ready(self, overwrite):
-        filepath= os.path.join(self.data_out, "grid_attributes.pkl")
+        filepath= os.path.join(self.casestudy.data_out, "grid_attributes.pkl")
         if not os.path.exists(filepath):
             self.overwrite = True
         else : self.overwrite = overwrite 

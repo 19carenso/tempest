@@ -8,9 +8,9 @@ REGION: 'Tropics'
 
 # Inner paths 
 # I think that ../ should always led to root of the project
-DIR_INPUT: '/input' 
-DIR_FIG: '/figures' 
-DIR_OUT: '/output'
+DIR_INPUT: 'input/' 
+DIR_FIG: 'figures/' 
+DIR_OUT: 'output/'
 DIR_TEMPDATA: '/scratchx/mcarenso/tempest'
 
 # Where we store the data we need for the analysis, independant of model_region

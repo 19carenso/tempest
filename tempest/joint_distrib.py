@@ -3,6 +3,8 @@ import os
 import time
 import sys
 import glob
+import csv
+import pickle
 
 from math import log10
 from skimage import measure # pylance: disable=import-error 
@@ -17,12 +19,14 @@ import matplotlib.ticker as mticker
 import cartopy.crs as ccrs
 from .plots.plot2d import set_frame_invlog, show_joint_histogram
 
-class JointDistribution():
+from .grid import Grid
+
+class JointDistribution(Grid):
     """
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, nd=4, storm_tracking = False, overwrite=False):
+    def __init__(self, grid, nd=4, storm_tracking = True, overwrite=False):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -47,23 +51,41 @@ class JointDistribution():
         self.sample1 = self.prec["mean_Prec"].to_numpy().ravel()
         self.sample2 = self.prec["max_Prec"].to_numpy().ravel()
 
-        self.dist1 = Distribution(name = self.name + '_' + 'mean_Prec',  bintype = "invlogQ", nd = self.nd, fill_last_decade=True)
-        self.dist1.compute_distribution(self.sample1)
+        self.overwrite = overwrite
 
-        self.dist2 = Distribution(name = self.name + '_' + 'max_Prec',  bintype = "invlogQ", nd = self.nd, fill_last_decade=True)
-        self.dist2.compute_distribution(self.sample2)
+        cwd = os.getcwd()
+        rel_dir_out = self.settings["DIR_OUT"]
+        abs_dir_out = os.path.join(cwd, self.settings["DIR_OUT"])
+        self.dir_out = os.path.join(abs_dir_out, self.name)
+        if not os.path.exists(self.dir_out):
+            print("First instance of this Joint Distribution, so setting overwrite to true")
+            os.makedirs(self.dir_out)
+            self.overwrite = True
 
+        # Retrieves self.dist1 and self.dist2
+        self.get_distribs()
         self.bins1 = self.dist1.bins
         self.bins2 = self.dist2.bins
 
-        self.density = None
-        self.bin_locations_stored = False
-        self.overwrite = overwrite
+        jd_name = self.dist1.name +'_joint_'+self.dist2.name
+        self.jd_path = os.path.join(self.dir_out, jd_name)
+        if not os.path.exists(self.jd_path):
+            os.makedirs(self.jd_path)
 
-        self.compute_distribution(self.sample1, self.sample2)
-        self.compute_normalized_density(self.sample1, self.sample2)
-        
-        self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()
+        if overwrite : 
+            print("Overwrite set to true, so computing basics and saving them")
+            self.density = None
+            self.bin_locations_stored = False
+
+            self.compute_distribution(self.sample1, self.sample2)
+            self.compute_normalized_density(self.sample1, self.sample2)
+            
+            self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()
+            
+            self.save_basics_to_npy()
+        else : 
+            print("Overwrite set to false so loading basics attributes from .npy")
+            self.load_from_npy()
         
         if storm_tracking : 
             # Should check if regridded MCS labels is already stored in grid
@@ -72,45 +94,98 @@ class JointDistribution():
             self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm),axis=3)
 
             # get storm tracking data
+            if self.verbose : print("Loading storms...")
             self.storms, self.label_storms = self.load_storms_tracking()
+            if self.verbose : print("Retrieve labels in jdist")
             self.labels_in_jdist = self.get_labels_in_jdist_bins(self)
+
              
+        
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
         attribute value when its string fits is small enough."""
-
         out = '< JointDistribution object:\n'
         # print keys
-        for k in self.__dict__.keys():
-            out = out+' . %s: '%k
-            if sys.getsizeof(getattr(self,k).__str__()) < 80:
+        for k, v in self.__dict__.items():
+            out = out + f' . {k}: '
+            if sys.getsizeof(str(v)) < 80:
                 # show value
-                out = out+'%s\n'%str(getattr(self,k))
+                out = out + f'{v}\n'
             else:
                 # show type
-                out = out+'%s\n'%getattr(self,k).__class__
-        out = out+' >'
-
+                out = out + f'{type(v)}\n'
+        out = out + ' >'
         return out
-    
+
     def __str__(self):
-        """Override string function to print attributes
-        """
-        # method_names = []
-        # str_out = '-- Attributes --'
+        """Override string function to print attributes"""
         str_out = ''
-        for a in dir(self):
-            if '__' not in a:
-                a_str = str(getattr(self,a))
+        for k, v in self.__dict__.items():
+            if '__' not in k:
+                a_str = str(v)
                 if 'method' not in a_str:
-                    str_out = str_out+("%s : %s\n"%(a,a_str))
-        #         else:
-        #             method_names.append(a)
-        # print('-- Methods --')
-        # for m in method_names:
-        #     print(m)
+                    str_out = str_out + f"{k} : {a_str}\n"
         return str_out
-    
+
+    def get_distribs(self):
+        name_dist1 = self.name + '_' + 'mean_Prec'
+        path_dist1 = os.path.join(self.dir_out, name_dist1)
+        name_dist2 = self.name + '_' + 'max_Prec'
+        path_dist2 = os.path.join(self.dir_out, name_dist2)
+
+        if self.overwrite:
+            self.dist1 = Distribution(name = name_dist1,  bintype = "invlogQ", nd = self.nd, fill_last_decade=True)
+            self.dist1.compute_distribution(self.sample1)
+            with open(path_dist1, 'wb') as file:
+                pickle.dump(self.dist1, file)
+
+            self.dist2 = Distribution(name = name_dist2,  bintype = "invlogQ", nd = self.nd, fill_last_decade=True)
+            self.dist2.compute_distribution(self.sample2)
+            with open(path_dist2, 'wb') as file:
+                pickle.dump(self.dist2, file)
+            print("Distribs have been recomputed because overwrite is set to True")
+
+        elif os.path.exists(path_dist1) and os.path.exists(path_dist2):
+            with open(path_dist1, 'rb') as file:
+                self.dist1 = pickle.load(file)
+            with open(path_dist2, 'rb') as file:
+                self.dist2 = pickle.load(file)
+            print("Distribs loaded")
+        
+        else : 
+            print("Overwrite set to false, but not distribs found !")
+
+    def save_basics_to_npy(self):
+        """
+        This function is called after the first instance of the object. It stores the very basics arrays required for functionning
+        Then after computing any new array saving into this dir must be made in the same fashion
+        """
+        self.npy_attributes = {
+            'bincount': self.bincount,
+            'norm_density': self.norm_density,
+            'digit_3d_1': self.digit_3d_1,
+            'digit_3d_2': self.digit_3d_2
+        }
+
+        for attr, value in self.npy_attributes.items():
+            attr_filename = attr + '.npy'
+            attr_file_path = os.path.join(self.jd_path, attr_filename)
+            np.save(attr_file_path, value)
+
+    def load_from_npy(self):
+        """
+        This function loads everything that has been saved
+        """
+        files = os.listdir(self.jd_path)
+        self.npy_attributes = {}
+        for file in files:
+            if file.endswith('.npy'):
+                attr_name = os.path.splitext(file)[0]
+                file_path = os.path.join(self.jd_path, file)
+                attr_value = np.load(file_path)
+                setattr(self, attr_name, attr_value)
+                self.npy_attributes[attr_name] = attr_value
+
     def format_dimensions(self,sample):
         """Reshape the input data, test the validity and returns the dimensions
         and formatted data.
@@ -255,7 +330,7 @@ class JointDistribution():
 
         digit1 = np.digitize(sample1, self.bins1, right = True)
         digit2 = np.digitize(sample2, self.bins2, right = True)
-        if verbose : print(digit1, digit2)
+
         N1 = [np.sum(digit1==i1) for i1 in range(l1)]
         N2 = [np.sum(digit2==i2) for i2 in range(l2)]
         Ntot = sample1.size
@@ -403,11 +478,10 @@ class JointDistribution():
         ax = set_frame_invlog(ax, self.dist1.ranks, self.dist2.ranks)
         ax.set_xlabel(r"1$^\circ\times 1$day extremes")
         ax.set_ylabel(r"4km-30mn extremes")
-        # ax.set_title(title)
+        ax.set_title(title)
 
         # -- Density
         pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
-        
 
         # -- Masks multiscale categories
         ax_show.imshow(self.mask_show.T,alpha=0.5,origin='lower')
@@ -740,3 +814,5 @@ class JointDistribution():
                                 print("Oops!  That was no valid number.  Try again...")
 
         return out_ij, keys
+    
+

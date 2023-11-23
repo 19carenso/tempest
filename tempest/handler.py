@@ -10,7 +10,8 @@ import xarray as xr
 
 class Handler():
     def __init__(self, settings_path):
-        with open(settings_path, 'r') as file:
+        self.settings_path = settings_path
+        with open(self.settings_path, 'r') as file:
             self.settings = yaml.safe_load(file)
 
         self.rel_table = self.load_rel_table(self.settings['REL_TABLE'])
