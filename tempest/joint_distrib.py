@@ -98,9 +98,7 @@ class JointDistribution(Grid):
             self.storms, self.label_storms = self.load_storms_tracking()
             if self.verbose : print("Retrieve labels in jdist")
             self.labels_in_jdist = self.get_labels_in_jdist_bins(self)
-
-             
-        
+       
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
         attribute value when its string fits is small enough."""
