@@ -26,7 +26,7 @@ class JointDistribution(Grid):
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, nd=4, storm_tracking = True, overwrite=False):
+    def __init__(self, grid, nd=4, storm_tracking = True, overwrite=False, verbose = False):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -36,7 +36,7 @@ class JointDistribution(Grid):
         
         # Inheritance by hand because __super__() speaks too much 
         self.grid = grid
-
+        self.verbose = verbose
         self.name = grid.name
         self.settings = grid.settings
         
@@ -691,9 +691,10 @@ class JointDistribution(Grid):
         # return this fraction
         return bin_fraction_mcs, bin_noise
 
-    def plot_data(self, data, data_noise, cmap = plt.cm.RdBu_r, branch = False, label = ''):
+    def plot_data(self, data, data_noise, cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None)):
         self.make_mask()
-        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4.85))
+        if fig==None and ax==None: 
+            fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4.85))
         
         Z_nd = self.norm_density.T
         Z = data.T
@@ -702,7 +703,6 @@ class JointDistribution(Grid):
         # Should be passed as **kwargs
         title = f"Data over Normalized density"
         scale = 'linear'
-        vbds = (None, None)
         cmap = cmap
 
         # -- Frame
