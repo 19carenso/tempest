@@ -140,3 +140,14 @@ class Handler():
         gc.collect()
         return prec
     
+    def compute_QV_sat(self, grid, i_t):
+        qv = self.load_var(grid, 'QV', i_t)
+        rh = self.load_var(grid, 'RH', i_t)
+
+        qv_sat = qv/rh
+        
+        del qv
+        del rh
+        gc.collect()
+        return qv_sat
+        

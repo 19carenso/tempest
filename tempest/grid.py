@@ -23,7 +23,8 @@ class Grid():
     # except verbose i actually don't want any
     def __init__(self, casestudy, fast = True, overwrite = True, verbose_steps = False, verbose=False):
         self.casestudy = casestudy
-        
+        self.settings = casestudy.settings
+
         ## Get the region borders
         self.n_lat = self.casestudy.lat_slice.stop - self.casestudy.lat_slice.start
         self.n_lon = self.casestudy.lon_slice.stop - self.casestudy.lon_slice.start
@@ -72,8 +73,9 @@ class Grid():
     def _prepare_grid(self):
         if  self.overwrite and self.fast : 
             # import one timestep to use its coordinates as a template
-            for file in os.listdir(self.data_in):
-                self.template_native_df = xr.open_dataset(os.path.join(self.data_in,file))
+            dir = self.settings['DIR_DATA_2D_IN']
+            for file in os.listdir(dir):
+                self.template_native_df = xr.open_dataset(os.path.join(dir,file))
                 break
 
             # compute
@@ -81,8 +83,8 @@ class Grid():
             if self.verbose_steps: print('-- Prepare data')
 
             if self.verbose_steps: print('compute coord centers...')
-            self.lat_centers = self.template_native_df['lat'].sel(lat=self.lat_slice).values
-            self.lon_centers = self.template_native_df['lon'].sel(lon=self.lon_slice).values
+            self.lat_centers = self.template_native_df['lat'].sel(lat=self.casestudy.lat_slice).values
+            self.lon_centers = self.template_native_df['lon'].sel(lon=self.casestudy.lon_slice).values
             
             if self.verbose_steps: print('compute pixel surface...')
 
@@ -339,7 +341,7 @@ class Grid():
 
     def get_var_ds_file(self, var_id):
         filename = var_id.lower()+'.nc'
-        file = os.path.join(self.data_out, filename)
+        file = os.path.join(self.casestudy.data_out, filename)
         return(file)
 
     def get_var_id_ds(self, var_id):

@@ -32,7 +32,8 @@ class CaseStudy():
         self.region = self.settings['REGION']
         self.model = self.settings['MODEL']
         self.name = f"{self.model}_{self.region}"
-        self.data_in = self.settings['DIR_DATA_IN']
+
+
         self.data_out = os.path.join(self.settings['DIR_DATA_OUT'], self.name)
         # Storm tracking paths in a pandas df
         self.rel_table = self.handler.load_rel_table(self.settings['REL_TABLE'])
@@ -53,7 +54,10 @@ class CaseStudy():
         if overwrite or not os.path.exists(json_path):
             if not os.path.exists(json_path) : print(f"Creation of {json_path}")
             if overwrite : print(f"Overwriting the existing variables in {json_path}")
-            self.variables_names, self.days_i_t_per_var_id = self._load_var_id_in_data_in()
+            self.variables_names = []
+            self.days_i_t_per_var_id = {}
+            self._load_var_id_in_data_in(True)
+            self._load_var_id_in_data_in(False)
             self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
             self.days_i_t_per_var_id = self.skip_prec_i_t()
             self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
@@ -104,33 +108,38 @@ class CaseStudy():
         self.lat_slice = slice(self.settings['BOX'][0], self.settings['BOX'][1])
         self.lon_slice = slice(self.settings['BOX'][2], self.settings['BOX'][3])
         
-    def _load_var_id_in_data_in(self):
+    def _load_var_id_in_data_in(self, bool_2d):
         """
-        this functions loads the data from your DIR_DATA_IN settings
+        this functions loads the data from either DIR_DATA_2D_IN or DIR_DATA_3D_IN
 
         :param dir: The path to your DIR_DATA_IN in .yaml
 
         :return
             var_id: list of variables found
-            days_i_t_per_var_id: a dictionnary that contains the days and correspong indexes per var_id    
-                            days_i_t_per_var_id[var_id] = dict with keys the dates and values the indexes
+            self.days_i_t_per_var_id: a dictionnary that contains the days and correspong indexes per var_id    
+                            self.days_i_t_per_var_id[var_id] = dict with keys the dates and values the indexes
         """
-        dir = self.settings['DIR_DATA_IN']
-        variables_id = []
-        days_i_t_per_var_id = {}
+        if bool_2d:
+            dir = self.settings['DIR_DATA_2D_IN']
+            variable_pattern = re.compile(r'\.([A-Za-z0-9]+)\.2D\.nc$') 
+            timestamp_pattern =  re.compile(r'(\d{10})\.\w+\.2D\.nc')
+        else:
+            dir = self.settings['DIR_DATA_3D_IN']
+            variable_pattern = re.compile(r'_([A-Za-z0-9]+)\.nc$') 
+            timestamp_pattern = re.compile(r'_(\d{10})_[A-Za-z0-9]+\.nc$')
 
-        def get_day_and_i_t(filename):
-                # Define a regex pattern to extract the timestamp from your file path
-                timestamp_pattern = r'(\d{10})\.\w+\.2D\.nc'
-
+        def get_day_and_i_t(filename, timestamp_pattern):
                 # starting date
-                date_ref = dt.datetime(year=2016, month=8, day=1)
+                dict_date_ref = self.settings["DATE_REF"]
+                date_ref = dt.datetime(year=dict_date_ref["year"], month=dict_date_ref["month"], day=dict_date_ref["day"])
                 
                 def get_datetime_and_i_t(filename):
                     # Extract the timestamp from the file path
                     match = re.search(timestamp_pattern, filename)
+                    # print(filename, match)
                     if match:
                         timestamp = int(match.group(1))
+                        # print(timestamp)
                         # Calculate the delta in seconds
                         delta_t = dt.timedelta(seconds=timestamp * 7.5)
                         # Calculate the current date
@@ -144,29 +153,26 @@ class CaseStudy():
                 # time dimension
                 
                 date_time, i_t = get_datetime_and_i_t(filename)
-                days_i_t = {} ## maybe here work on storing the full datetimes with corresponding i_t. 
                 day = date_time.strftime("%y-%m-%d")
                 return day, i_t
 
         # Define a regular expression pattern to extract variable names from filenames.
-        variable_pattern = re.compile(r'\.([A-Za-z0-9]+)\.2D\.nc$')
-
-        for root, _, files in os.walk(dir):
-            for filename in sorted(files):
-                match = variable_pattern.search(filename)
-                if match:
-                    var_id = match.group(1)
-                    if var_id not in variables_id : 
-                        variables_id.append(var_id)
-                        days_i_t_per_var_id[var_id] = {}
-                        
-                    day, i_t = get_day_and_i_t(filename)
-                    if day not in list(days_i_t_per_var_id[var_id].keys()):
-                        days_i_t_per_var_id[var_id][day] = [i_t]
-                    else :
-                        days_i_t_per_var_id[var_id][day].append(i_t)
-                        
-        return variables_id, days_i_t_per_var_id
+        files = glob.glob(dir +'/*.nc')
+        for filename in sorted(files):
+            match = variable_pattern.search(filename)
+            # print(filename, match)
+            if match:
+                var_id = match.group(1)
+                # print(var_id)
+                if var_id not in self.variables_names : 
+                    self.variables_names.append(var_id)
+                    self.days_i_t_per_var_id[var_id] = {}
+                    
+                day, i_t = get_day_and_i_t(filename, timestamp_pattern)
+                if day not in list(self.days_i_t_per_var_id[var_id].keys()):
+                    self.days_i_t_per_var_id[var_id][day] = [i_t]
+                else :
+                    self.days_i_t_per_var_id[var_id][day].append(i_t)
 
     def _chek_variables_days_and_i_t(self):
         for var_id in self.variables_names:
