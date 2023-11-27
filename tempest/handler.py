@@ -7,6 +7,7 @@ import yaml
 import gc
 import xarray as xr
 
+from .thermo import saturation_specific_humidity
 
 class Handler():
     def __init__(self, settings_path):
@@ -103,23 +104,37 @@ class Handler():
 
     def load_var(self, grid, var_id, i_t): 
         """
-        Load a variable from a file.
-        If the variable is a new one, call the appropriate function.
+        Load a variable at specified i_t.
+        If the variable is a new one, calls the appropriate function
+        If the variable is 3D one, it will return a dataset instead.
+            Must be handled in your designed funcs that depends on 3D vars
         """
-        if var_id in grid.new_variables_names:
-            if hasattr(self, grid.new_var_functions[var_id]):
-                load_func = getattr(self, grid.new_var_functions[var_id])
-            else : print(f"Handler has no method {grid.new_var_functions[var_id]}")
+        new_var_names = grid.casestudy.new_variables_names
+        var_2d = grid.casestudy.var_names_2d
+        var_3d = grid.casestudy.var_names_3d
+        new_var_funcs = grid.casestudy.new_var_functions
+        
+        if var_id in new_var_names:
+            if hasattr(self, new_var_funcs[var_id]):
+                load_func = getattr(self, new_var_funcs[var_id])
+            else : print(f"Handler has no method {new_var_funcs[var_id]}")
 
             da_new_var = load_func(grid, i_t)
             return da_new_var
             
         else : 
             root = self.get_rootname_from_i_t(i_t)
-            filename_var = root+f".{var_id}.2D.nc"
-            filepath_var = os.path.join(grid.data_in, filename_var)
-            da_var = xr.open_dataarray(filepath_var).load().sel(lon=grid.lon_slice,lat=grid.lat_slice)[0]
-            return da_var
+            if var_id in var_2d : 
+                path_data_in = grid.settings["DIR_DATA_2D_IN"]
+                filename_var = root+f".{var_id}.2D.nc"
+                filepath_var = os.path.join(path_data_in, filename_var)
+                var = xr.open_dataarray(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)[0]
+            elif var_id in var_3d :
+                path_data_in = grid.settings["DIR_DATA_3D_IN"]
+                filename_var = root+f"_{var_id}.nc"
+                filepath_var = os.path.join(path_data_in, filename_var)
+                var = xr.open_dataset(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)
+            return var
         
     def load_prec(self, grid, i_t):
         """
@@ -140,14 +155,19 @@ class Handler():
         gc.collect()
         return prec
     
-    def compute_QV_sat(self, grid, i_t):
-        qv = self.load_var(grid, 'QV', i_t)
-        rh = self.load_var(grid, 'RH', i_t)
-
-        qv_sat = qv/rh
+    def compute_qv_sat(self, grid, i_t):
+        pp = self.load_var(grid, "PP", i_t)
+        tabs = self.load_var(grid, "TABS", i_t)
+        p_surf = pp["p"].values[0] +pp["PP"].values[0, 0, :, :]
+        t_surf = tabs["TABS"][0,0,:,:].values
         
-        del qv
-        del rh
+        original_shape = pp.shape
+        qv_sat = saturation_specific_humidity(t_surf.ravel(), p_surf.ravel()).reshape(original_shape)
+        
+        del pp
+        del tabs
+        del p_surf
+        del t_surf
         gc.collect()
         return qv_sat
         

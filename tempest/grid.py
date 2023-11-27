@@ -349,7 +349,7 @@ class Grid():
         if not os.path.exists(file):
             print(f"\n Woah,\n the netcdf for this variable {var_id} didn't exist yet, let's make it from scratch : \n")
             dims_global = ['lat_global', 'lon_global', 'days']
-            days = list(self.days_i_t_per_var_id[var_id].keys())
+            days = list(self.casestudy.days_i_t_per_var_id[var_id].keys())
             coords_global = {'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': days}
             da_global = xr.DataArray(None, dims = dims_global, coords = coords_global)
             ds = xr.Dataset({'global_pixel_surf': da_global})
@@ -398,7 +398,7 @@ class Grid():
             print(f"These keys : {keys} have to be computed.")
             
             da_days_funcs = [[] for _ in funcs]
-            days = list(self.days_i_t_per_var_id[var_id].keys())
+            days = list(self.casestudy.days_i_t_per_var_id[var_id].keys())
             for day in days:
                 print(f"computing day {day}")
                 da_funcs = self.regrid_funcs_and_save_by_day(day, var_id, funcs)
@@ -472,7 +472,7 @@ class Grid():
                 list: A list of regridded data for each function in funcs_to_compute.
             """
             # Get the data for the day
-            var_current = self.handler.load_var(self, var_id, i_t)
+            var_current = self.casestudy.handler.load_var(self, var_id, i_t)
 
             # Compute each func(var) for the current time step
             results = []
@@ -498,8 +498,8 @@ class Grid():
                 warnings.simplefilter('ignore')
 
                 var_day = []
-                for i_t in self.days_i_t_per_var_id[var_id][day]:
-                    var_day.append(self.handler.load_seg(i_t)) # This loads quite a lot into memory. 
+                for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
+                    var_day.append(self.casestudy.handler.load_seg(i_t)) # This loads quite a lot into memory. 
                 var_day = xr.concat(var_day,dim='time')
                 
                 labels_regrid = self.get_labels_data_from_center_to_global(var_day)
@@ -513,7 +513,7 @@ class Grid():
         else : 
             # Loop over i_t, then loop over funcs_to_compute as to call regrid_single_time_step only once per i_t
             all_i_t_for_day_per_func = [[] for _ in funcs_to_compute]
-            for i_t in self.days_i_t_per_var_id[var_id][day]:
+            for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
                 # Regrid time step for each func
                 results = regrid_single_time_step(i_t, var_id, funcs_to_compute)
                 for i_f, result in enumerate(results):

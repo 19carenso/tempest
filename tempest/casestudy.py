@@ -54,18 +54,18 @@ class CaseStudy():
         if overwrite or not os.path.exists(json_path):
             if not os.path.exists(json_path) : print(f"Creation of {json_path}")
             if overwrite : print(f"Overwriting the existing variables in {json_path}")
-            self.variables_names = []
             self.days_i_t_per_var_id = {}
-            self._load_var_id_in_data_in(True)
-            self._load_var_id_in_data_in(False)
+            self.var_names_2d = self._load_var_id_in_data_in(True)
+            self.var_names_3d = self._load_var_id_in_data_in(False)
+            self.variables_names = self.var_names_2d + self.var_names_3d
             self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
             self.days_i_t_per_var_id = self.skip_prec_i_t()
             self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
             print(f"Variables data retrieved. Saving them in {json_path}")
-            self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, json_path)
+            self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, self.var_names_2d, self.var_names_3d, json_path)
         else :
             if self.verbose : print(f'Found json file at {json_path}, loading it..')
-            self.variables_names, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
+            self.variables_names, self.var_names_2d, self.var_names_3d, self.days_i_t_per_var_id = self.load_var_id_from_json(json_path) #dates are in "year-date-month" for now
             self.new_variables_names = self.settings["new_var"]["variables_id"]
             self.new_var_dependencies = self.settings["new_var"]["dependencies"]
             self.new_var_functions=  self.settings["new_var"]["functions"]
@@ -119,6 +119,7 @@ class CaseStudy():
             self.days_i_t_per_var_id: a dictionnary that contains the days and correspong indexes per var_id    
                             self.days_i_t_per_var_id[var_id] = dict with keys the dates and values the indexes
         """
+        var_names = []
         if bool_2d:
             dir = self.settings['DIR_DATA_2D_IN']
             variable_pattern = re.compile(r'\.([A-Za-z0-9]+)\.2D\.nc$') 
@@ -164,8 +165,8 @@ class CaseStudy():
             if match:
                 var_id = match.group(1)
                 # print(var_id)
-                if var_id not in self.variables_names : 
-                    self.variables_names.append(var_id)
+                if var_id not in var_names : 
+                    var_names.append(var_id)
                     self.days_i_t_per_var_id[var_id] = {}
                     
                 day, i_t = get_day_and_i_t(filename, timestamp_pattern)
@@ -173,7 +174,9 @@ class CaseStudy():
                     self.days_i_t_per_var_id[var_id][day] = [i_t]
                 else :
                     self.days_i_t_per_var_id[var_id][day].append(i_t)
-
+                    
+        return var_names
+    
     def _chek_variables_days_and_i_t(self):
         for var_id in self.variables_names:
             print(var_id)
@@ -185,7 +188,7 @@ class CaseStudy():
                 print('%s: (%d) %d-%d'%(day,len(i_t_day), i_t_day[0], i_t_day[-1]))
         print('\n')
 
-    def save_var_id_as_json(self, variables_id, days_i_t_per_var_id, json_filename):
+    def save_var_id_as_json(self, variables_id, days_i_t_per_var_id, var_2d, var_3d, json_filename):
         """
         Save the variables_id and days_i_t_per_var_id as a JSON file.
 
@@ -195,6 +198,8 @@ class CaseStudy():
         """
         data_to_save = {
             "variables_id": variables_id,
+            "variables_2d_id" : var_2d,
+            "variables_3d_id" : var_3d,
             "days_i_t_per_var_id": days_i_t_per_var_id
         }
 
@@ -213,9 +218,11 @@ class CaseStudy():
             with open(json_filename, 'r') as json_file:
                 data = json.load(json_file)
                 variables_id = data.get("variables_id", [])
+                var_2d = data.get("variables_2d_id", [])
+                var_3d = data.get("variables_3d_id", [])
                 days_i_t_per_var_id = data.get("days_i_t_per_var_id", {})
                 print(f"Data loaded from {json_filename}")
-                return variables_id, days_i_t_per_var_id
+                return variables_id, var_2d, var_3d, days_i_t_per_var_id
         except FileNotFoundError:
             print(f"File {json_filename} not found.")
             return None, None

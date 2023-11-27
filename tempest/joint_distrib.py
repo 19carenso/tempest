@@ -21,7 +21,7 @@ from .plots.plot2d import set_frame_invlog, show_joint_histogram
 
 from .grid import Grid
 
-class JointDistribution(Grid):
+class JointDistribution():
     """
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
@@ -37,12 +37,12 @@ class JointDistribution(Grid):
         # Inheritance by hand because __super__() speaks too much 
         self.grid = grid
         self.verbose = verbose
-        self.name = grid.name
+        self.name = grid.casestudy.name
         self.settings = grid.settings
         
         self.nd = nd
 
-        self.ditvi = grid.days_i_t_per_var_id
+        self.ditvi = grid.casestudy.days_i_t_per_var_id
         
         self.prec = grid.get_var_id_ds("Prec")
         
