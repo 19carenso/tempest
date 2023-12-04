@@ -22,7 +22,7 @@ gr = grid.Grid(cs, fast = True, overwrite= False, verbose_steps = True, verbose 
 
 if __name__ == '__main__':
 
-    gr.compute_funcs_for_var_id("QV_sat_2d")
+    gr.compute_funcs_for_var_id("Prec")
 
     # jd = joint_distrib.JointDistribution(gr, nd= 5, overwrite = False, storm_tracking = True)
 
