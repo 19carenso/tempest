@@ -6,7 +6,7 @@ import math
 
 import warnings
 from scipy.optimize import OptimizeWarning
-from sklearn.metrics import UndefinedMetricWarning
+# from sklearn.metrics import UndefinedMetricWarning
 
 
 # Suppress specific warning
@@ -98,7 +98,7 @@ def set_storm_growth_rate(storm, r_treshold = 0.85, verbose = False, plot = Fals
         s_max = max(surf)
         time_breaks = [0, len(surf)//2, len(surf)]
 
-        warnings.filterwarnings("error", category=UndefinedMetricWarning)
+        # warnings.filterwarnings("error", category=UndefinedMetricWarning)
         warnings.filterwarnings("error", category=OptimizeWarning)
 
         try:
@@ -109,13 +109,13 @@ def set_storm_growth_rate(storm, r_treshold = 0.85, verbose = False, plot = Fals
             decay_r_squared = r2_score(surf[math.floor(t_breaks[1]):], s_id[math.floor(t_breaks[1]):])
             growth_rate = s_max / (t_breaks[1] - t_breaks[0])
             setattr(storm, 'growth_rate', growth_rate)
-
-        except UndefinedMetricWarning as e:
-            # Handle the warning here, e.g., print a message or log it
-            print("Caught UndefinedMetricWarning:", e)
             
         except OptimizeWarning as e:
             print("That's a complicated storm")
+        
+        except Exception as e:
+            # Handle the warning here, e.g., print a message or log it
+            print("Caught Exception:", e)
         
         if verbose : print(f"For storm with label {storm.label}, the growth rate computed by fitting a triangle is {growth_rate} with an r-score of {r_squared}")
     

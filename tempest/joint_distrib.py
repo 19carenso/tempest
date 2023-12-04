@@ -19,8 +19,6 @@ import matplotlib.ticker as mticker
 import cartopy.crs as ccrs
 from .plots.plot2d import set_frame_invlog, show_joint_histogram
 
-from .grid import Grid
-
 class JointDistribution():
     """
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
@@ -97,8 +95,24 @@ class JointDistribution():
             if self.verbose : print("Loading storms...")
             self.storms, self.label_storms = self.load_storms_tracking()
             if self.verbose : print("Retrieve labels in jdist")
+
+            self.i_storms = {}
+            for i, storm in enumerate(self.storms):
+                if storm.label not in self.i_storms.keys():
+                    self.i_storms[storm.label] = i
             self.labels_in_jdist = self.get_labels_in_jdist_bins(self)
-       
+            ## TODO : you know what to do #settings
+            self.wpwp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(130, 185))
+            self.ep_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 50), slice(215, 280))
+            self.atl_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 45), slice(290, 350))
+            # self.fk_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(10, 30), slice(160, 260))
+            # self.af_rf_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(340, 40))
+            self.io_wp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(20, 35), slice(55, 100),)
+            self.se_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 45), slice(100, 130))
+            self.ct_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(50, 60), slice(80, 120))
+            self.regions_labels_in_jdist = [self.wpwp_labels_in_jdist, self.ep_itcz_labels_in_jdist, self.atl_itcz_labels_in_jdist, 
+                                           self.io_wp_labels_in_jdist, self.se_as_labels_in_jdist, self.ct_as_labels_in_jdist]
+
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
         attribute value when its string fits is small enough."""
@@ -350,7 +364,7 @@ class JointDistribution():
         
     def compute_conditional_data_over_density(self, sample1, sample2, data = None):
         """
-        TODO
+        TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
         """                                
         digit1 = np.digitize(sample1.flatten(), self.bins1, right = True)
         digit2 = np.digitize(sample2.flatten(), self.bins2, right = True)
@@ -501,11 +515,21 @@ class JointDistribution():
             # show 1-1 line
             ax_show.plot(x_branch_2,x_branch_2,'k--')
             
-    def get_mask_yxt(self, d1, d2):
+    def get_mask_yxt(self, d1, d2, regional = False, lat_slice = None, lon_slice = None):
         dj = self.joint_digit(d1, d2)
         dj_3d = self.joint_digit(self.digit_3d_1, self.digit_3d_2)
-        
-        return dj_3d == dj
+        mask = dj_3d == dj
+        if regional : 
+            region_mask = np.zeros_like(mask, dtype = bool)
+            if lat_slice is not None and lon_slice is not None:
+                if lon_slice.start < lon_slice.stop:
+                    region_mask[lat_slice, lon_slice] = mask[lat_slice, lon_slice] 
+                elif lon_slice.stop < lon_slice.start : 
+                    region_mask[lat_slice, slice(0, lon_slice.stop)]= mask[lat_slice, slice(0, lon_slice.stop)]
+                    region_mask[lat_slice, slice(lon_slice.start, 360)]= mask[lat_slice, slice(lon_slice.start, 360)]
+
+            mask = region_mask
+        return mask
         
     def get_mask_yxt_from_mask_jdist(self, mask_jdist):
         """
@@ -550,9 +574,9 @@ class JointDistribution():
         # cmap_mcs = plt.cm.get_cmap('Accent', 10)
 
         # compute figure size
-        dlon = np.diff((self.grid.lon_slice.start, self.grid.lon_slice.stop))[0] % 360
+        dlon = np.diff((self.grid.casestudy.lon_slice.start, self.grid.casestudy.lon_slice.stop))[0] % 360
         if dlon == 0: dlon = 360
-        dlat = np.diff((self.grid.lat_slice.start, self.grid.lat_slice.stop))[0]
+        dlat = np.diff((self.grid.casestudy.lat_slice.start, self.grid.casestudy.lat_slice.stop))[0]
         Lx_fig = 15
         Lx_cbar = 1.5
         Ly_title = 1
@@ -618,12 +642,12 @@ class JointDistribution():
         
         return unique_labels
     
-    def labels_in_joint_bin(self, i_bin, j_bin):
+    def labels_in_joint_bin(self, i_bin, j_bin, regional=False, lat_slice=None, lon_slice=None):
         """
         For each joint extreme in bin (i,j), merge MCS labels occurring in their spatiotemporal occurrence.
         LATER: also store their relative area.
         """
-        mask_yxt = self.get_mask_yxt(i_bin,j_bin)
+        mask_yxt = self.get_mask_yxt(i_bin,j_bin, regional, lat_slice, lon_slice)
         labels_i_j = self.labels_in_mask_yxt(mask_yxt)
         return labels_i_j
     
@@ -725,7 +749,7 @@ class JointDistribution():
         if branch : 
             # -- Branches
             cont = measure.find_contours(Z, 1)
-            N = 60
+            N = 40
             # fit
             popt_1, x_1, y_1, popt_2, x_2, y_2, func = self._fit_branches(cont,N)
             x_branch_2 = y_branch_1 = np.linspace(2,45,45)
@@ -738,6 +762,8 @@ class JointDistribution():
 
             # show 1-1 line
             ax_show.plot(x_branch_2,x_branch_2,'k--')
+        
+        return ax
 
     def load_storms_tracking(self):
         paths = glob.glob(os.path.join(self.settings['DIR_STORM_TRACKING'], '*.gz'))
@@ -745,7 +771,7 @@ class JointDistribution():
         label_storms = [storms[i].label for i in range(len(storms))]
         return storms, label_storms
     
-    def get_labels_in_jdist_bins(self, jdist):
+    def get_labels_in_jdist_bins(self, jdist, regional = False, lat_slice=None, lon_slice=None):
         """
         Return matrix N_i,N_j,N_MCS of labels in each bin of the joint distribution
         """
@@ -758,7 +784,7 @@ class JointDistribution():
             for j_bin in range(n_j):
                 
                 # print(i_bin,j_bin)
-                labels_bin = np.unique(self.labels_in_joint_bin(i_bin,j_bin))
+                labels_bin = np.unique(self.labels_in_joint_bin(i_bin,j_bin, regional, lat_slice, lon_slice))
                 # number of labels
                 n_labs = len(labels_bin)
                 n_store = min(n_mcs,n_labs)
@@ -767,50 +793,34 @@ class JointDistribution():
                 
         return labels_ij
     
-    def storm_attributes_on_jdist(self, attrs, funcs):
+    def storm_attributes_on_jdist(self, attr, func, region_labels_in_jdist = None):
         n_i, n_j = self.bincount.shape
-        if attrs.__class__ is str:
-            attrs = [attrs]
-        elif attrs.__class__ is not list:
-            attrs = list(attrs)
-        if funcs.__class__ is str:
-            funcs = [funcs]
-        elif funcs.__class__ is not list:
-            funcs = list(funcs)
+        out_ij = np.full((n_i, n_j), np.nan)
 
-        n_attr = len(attrs)
-        n_func = len(funcs)
-        out_ij = np.full((n_attr, n_func, n_i, n_j), np.nan)
-        keys = []
-
-        for i_bin in range(n_i):
+        for i_bin in range(1, n_i):
             if i_bin%1==0 : print(i_bin, end='')
-            for j_bin in range(n_j):
-                labels = self.labels_in_jdist[i_bin,j_bin]
+            for j_bin in range(1, n_j):
+                if region_labels_in_jdist is None : 
+                    labels = self.labels_in_jdist[i_bin,j_bin]
+                else : 
+                    labels = region_labels_in_jdist[i_bin, j_bin]
                 labels = np.unique(labels[~np.isnan(labels)])
 
-                if len(labels)>1:
-                    i_labels = np.where(np.isin(self.label_storms,labels))[0] # Ben does not use his clean version of labels here.. ? 
+                i_labels = []
+                for label in labels:
+                    i_labels.append(self.i_storms[label])
 
-                    for i_attr, attr in enumerate(attrs):
-                        for i_func, f in enumerate(funcs):
-                            key = f"{f}_{attr}"
-                            if key not in keys: keys.append(key)
+                if attr in self.storms[0].__dict__.keys():
+                    attr_list = [getattr(self.storms[i],attr) for i in i_labels]
+                elif attr in self.storms[0].clusters.__dict__.keys():
+                    attr_list = [np.mean(getattr(self.storms[i].clusters,attr)) for i in i_labels]
 
-                        if attr in self.storms[0].__dict__.keys():
-                            attr_list = [getattr(self.storms[i],attr) for i in i_labels]
-                        elif attr in self.storms[0].clusters.__dict__.keys():
-                            attr_list = [np.mean(getattr(self.storms[i].clusters,attr)) for i in i_labels]
+                if len(attr_list) > 0:
+                    try:
+                        out_ij[i_bin,j_bin] = getattr(np,'nan%s'%func)(attr_list)
+                    except ValueError:
+                        print(len(labels))
+                        print(attr_list)
+                        print("Oops!  That was no valid number.  Try again...")
 
-                        if len(attr_list) > 0:
-                            try:
-                                out_ij[i_attr,i_func,i_bin,j_bin] = getattr(np,'nan%s'%f)(attr_list)
-                            except ValueError:
-                                print(key)
-                                print(len(labels))
-                                print(attr_list)
-                                print("Oops!  That was no valid number.  Try again...")
-
-        return out_ij, keys
-    
-
+        return out_ij

@@ -3,6 +3,7 @@ import os
 import sys
 import re
 import yaml 
+import numpy as np
 
 import gc
 import xarray as xr
@@ -105,7 +106,7 @@ class Handler():
     def load_var(self, grid, var_id, i_t): 
         """
         Load a variable at specified i_t.
-        If the variable is a new one, calls the appropriate function
+        If the variable is a new one, calls the appropriate function, that will recursively call load_var
         If the variable is 3D one, it will return a dataset instead.
             Must be handled in your designed funcs that depends on 3D vars
         """
@@ -118,7 +119,6 @@ class Handler():
             if hasattr(self, new_var_funcs[var_id]):
                 load_func = getattr(self, new_var_funcs[var_id])
             else : print(f"Handler has no method {new_var_funcs[var_id]}")
-
             da_new_var = load_func(grid, i_t)
             return da_new_var
             
@@ -131,9 +131,10 @@ class Handler():
                 var = xr.open_dataarray(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)[0]
             elif var_id in var_3d :
                 path_data_in = grid.settings["DIR_DATA_3D_IN"]
+                chunks = {'z': 74} # Always 74 vertical level in these data
                 filename_var = root+f"_{var_id}.nc"
                 filepath_var = os.path.join(path_data_in, filename_var)
-                var = xr.open_dataset(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)
+                var = xr.open_dataset(filepath_var, chunks = chunks).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0)
             return var
         
     def load_prec(self, grid, i_t):
@@ -158,16 +159,36 @@ class Handler():
     def compute_qv_sat(self, grid, i_t):
         pp = self.load_var(grid, "PP", i_t)
         tabs = self.load_var(grid, "TABS", i_t)
-        p_surf = pp["p"].values[0] +pp["PP"].values[0, 0, :, :]
+        # retrieve surface temperature
+        p_surf = 100*pp["p"].values[0]+pp["PP"].values[0, 0, :, :]
         t_surf = tabs["TABS"][0,0,:,:].values
         
-        original_shape = pp.shape
+        original_shape = p_surf.shape
         qv_sat = saturation_specific_humidity(t_surf.ravel(), p_surf.ravel()).reshape(original_shape)
         
         del pp
         del tabs
         del p_surf
         del t_surf
+        gc.collect()
+        return qv_sat
+
+    def extract_w500(self, grid, i_t):
+        w = self.load_var(grid, "W", i_t)
+        ind_500 = int(np.abs(w.p.load() - 500).argmin())
+        w_500 = w.isel(z=ind_500).W.compute()
+        
+        del w
+        gc.collect()
+        return w_500
+    
+    def compute_qv_sat_2d(self, grid, i_t):
+        pres = 100*self.load_var(grid, "PSFC", i_t).values
+        temp = self.load_var(grid, "T2mm", i_t).values
+        original_shape = pres.shape
+        qv_sat = saturation_specific_humidity(temp.ravel(), pres.ravel()).reshape(original_shape)
+        del pres
+        del temp
         gc.collect()
         return qv_sat
         

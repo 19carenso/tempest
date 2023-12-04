@@ -61,21 +61,39 @@ new_var: ## These list and dict must be sorted by dependency
     [
       "Prec", 
       "MCS_label", 
-      "QV_sat"
+      "QV_sat",
+      "QV_sat_2d", 
+      "W500"
     ]
   dependencies:
     {
       "Prec" : ["Precac", "Precac-1"], 
       "MCS_label" : [],
-      "QV_sat" : ["PP", "TABS"]
+      "QV_sat" : ["PP", "TABS"], 
+      "QV_sat_2d" : ["T2mm", "PSFC"], 
+      "W500" : ["W"]
     }
   functions:
     {
       "Prec" : "load_prec",
       "MCS_label" : "load_seg",
-      "QV_sat" : "compute_qv_sat"
+      "QV_sat" : "compute_qv_sat", 
+      "QV_sat_2d" : "compute_qv_sat_2d", 
+      "W500" : "extract_w500"
     }
 
 # there should be a function to assert that. 
 skip_prec_i_t : 
   [491, 505, 862,  863,  958,  959, 1054, 1055, 1150, 1151, 1246, 1247, 1342, 1343, 1438, 1439, 1534, 1535, 1630, 1631, 1726, 1727, 1822, 1823] 
+
+regions : 
+  {
+    "wp_wp" : [slice(30, 50), slice(130, 185)],
+    "ep_itcz" : [slice(35, 50), slice(215, 280)],
+    "atl_itcz" : [slice(35, 45), slice(290, 350)],
+    "fk_itcz" :[slice(160, 260), slice(-20, 0)],
+    "af_rf" : [slice(340, 40), slice(-0, 20)],
+    "io_wp" : [slice(55, 100), slice(-10, 5)],
+    "se_as" : [slice(100, 130), slice(-10, 15)],
+    "ct_as" : [slice(80, 120), slice(20, 30)]
+      }
