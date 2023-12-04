@@ -7,6 +7,7 @@ import numpy as np
 
 import gc
 import xarray as xr
+import warnings 
 
 from .thermo import saturation_specific_humidity
 
@@ -24,7 +25,9 @@ class Handler():
         path_toocan = self.rel_table.loc[self.rel_table['Unnamed: 0.1'] == i_t-1, 'img_seg_path']
         if len(path_toocan)==1 : path_toocan = '/' + path_toocan.values[0]
         else : print('Rel_table has a problem')
-        img_toocan = xr.open_dataarray(path_toocan, engine='netcdf4')
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=xr.SerializationWarning)
+            img_toocan = xr.open_dataarray(path_toocan, engine='netcdf4')
 
         ## MJC : I don't understand why you need to do this.
         # if self.settings['DIR_TOOCANSEG_DYAMOND'] is None: path_TOOCAN = full_path

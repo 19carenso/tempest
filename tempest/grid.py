@@ -376,47 +376,65 @@ class Grid():
         funcs = []
         keys = []
         keys_loaded = [key for key in list(var_ds.variables) if var_id in key] 
-          
-        for func_name in self.func_names: # for now func_names is the same for all var_id, but it should be updated in a json to be in the same fashion that days_i_t_per_var_id
+        
+        if var_id == "Prec" :
+            funcs = self.func_names + ["heavy"]
+        else: 
+            funcs = self.func_names
+        
+        ## funcs are sent at the level where data is loaded, so must check cleanly which are required
+        funcs_to_compute = []
+        for func_name in funcs: # for now func_names is the same for all var_id, but it should be updated in a json to be in the same fashion that days_i_t_per_var_id
             key = '%s_%s'%(func_name,var_id)
             if key in keys_loaded : 
                 print('%s already computed, skipping...'%key)
                 # Here it should actually make another check that'd look at the days asked for computation in ditvi and compare to the one stored. 
                 # making a temp ditvi with only missing days to compute for this var would then be great
+                # Would required a to_complete bool tp then adapt the saving of computed days
                 continue
             else :
-                funcs.append(func_name) 
+                funcs_to_compute.append(func_name) 
                 keys.append(key) 
         
-        # If var_id is MCS (or maybe later contains MCS) we override the funcs and keys to only compute the MCS_label
+        # Overide - If var_id is MCS (or maybe later contains MCS) - the funcs and keys to only compute the MCS_label
         if var_id == "MCS_label" : 
             key = var_id
             keys = [key]
-            funcs = [None]
+            funcs_to_compute = [None]
         
-        if len(keys)>0 or var_id == "MCS_label": 
+        if len(keys)>0 : 
             print(f"These keys : {keys} have to be computed.")
             
-            da_days_funcs = [[] for _ in funcs]
+            da_days_funcs = [[] for _ in funcs_to_compute]
             days = list(self.casestudy.days_i_t_per_var_id[var_id].keys())
             for day in days:
                 print(f"computing day {day}")
-                da_funcs = self.regrid_funcs_and_save_by_day(day, var_id, funcs)
+                da_funcs = self.regrid_funcs_and_save_by_day(day, var_id, funcs_to_compute)
+                # if heavy is in funcs_to_compute, da_funcs will naturally have 4 items as if 3 more funcs but it's just 4 different keys
                 for i, da_func in enumerate(da_funcs):
                     da_days_funcs[i].append(da_func)
                 del da_funcs
                 gc.collect()
-
+            
+            # Actually func heavy returns 4 keys
+            if 'heavy' in funcs_to_compute:
+                keys += ["bis_mean_Prec", "Alpha_95", "Sigma_95", "Rcond_95"]
+                
             for da_day, key in zip(da_days_funcs, keys) : 
             ## concat the list of dataarrays along days dimensions
                 da_var_regrid = xr.concat(da_day, dim = 'days')
                 ## By doing assign we actually keep the already existing variables of the netcdf
                 ## If we were adding specific days to already existing key, we should do it an other way.
+                ## Could use the to_complete bool mentionned earlier in the function
                 var_ds = var_ds.assign(**{key: da_var_regrid})
+                
+            del da_days_funcs
+            del da_var_regrid
+            gc.collect()
             
             file = self.get_var_ds_file(var_id)
             os.remove(file)
-            var_ds.to_netcdf(file) ## this should update the stored .nc
+            var_ds.to_netcdf(file) ## this forces the update of the stored .nc
             var_ds.close()
         
         else : print("nothing to compute then")
@@ -426,15 +444,15 @@ class Grid():
         Compute multiple functions on new grid for a given day
         """	
 
-        outputs_da = [] ##Its a list of tuple (func, da_day_func_var_id)
+        outputs_da = [] ##list of full day DataArray for each func (so typically of len 1 for MCS_label, 2 for any variable, 3 for Prec)
 
         var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
         
         for var_regridded in  var_regridded_per_funcs:
             if var_id == 'MCS_label':  
                 n_MCS = var_regridded.shape[2]
-                da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'MCS', 'days'], 
-                                        coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'MCS':np.arange(n_MCS), 'days': [day]})
+                da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
+                                        coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
                 
             else :
                 da_day = xr.DataArray(var_regridded[0], dims=['lat_global', 'lon_global', 'days'], 
@@ -459,6 +477,12 @@ class Grid():
             list: A list of regridded data for each function in funcs_to_compute, in the same order.
 
         """
+
+        if 'heavy' in funcs_to_compute :
+            heavy_bool = True 
+            funcs_to_compute.remove('heavy')
+        else : 
+            heavy_bool = False
 
         def regrid_single_time_step(i_t, var_id, funcs_to_compute):
             """
@@ -494,23 +518,22 @@ class Grid():
         if var_id == "MCS_label" :
             ## MCS have a special treatment as they are the storm tracking inputs, they don't use regrid_single_time_step
             ## Any variable with MCS within should actually be treated differently.
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
+            
+            var_day = []
+            for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
+                var_day.append(self.casestudy.handler.load_seg(i_t)) # This loads quite a lot into memory. and where chunks couldcome usefull
+            var_day = xr.concat(var_day,dim='time')
+            
+            labels_regrid = self.get_labels_data_from_center_to_global(var_day)
+            labels_regrid = np.expand_dims(labels_regrid, axis=3)
 
-                var_day = []
-                for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
-                    var_day.append(self.casestudy.handler.load_seg(i_t)) # This loads quite a lot into memory. 
-                var_day = xr.concat(var_day,dim='time')
+            del var_day 
+            gc.collect()
+
+            return [labels_regrid] # we put it into a list so that it is the same fashion than over variables that could have multiple funcs
+
+        else :
                 
-                labels_regrid = self.get_labels_data_from_center_to_global(var_day)
-                labels_regrid = np.expand_dims(labels_regrid, axis=3)
-
-                del var_day 
-                gc.collect()
-
-                return [labels_regrid] # we put it into a list so that it is the same fashion than over variables that could have multiple funcs
-
-        else : 
             # Loop over i_t, then loop over funcs_to_compute as to call regrid_single_time_step only once per i_t
             all_i_t_for_day_per_func = [[] for _ in funcs_to_compute]
             for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
@@ -533,8 +556,25 @@ class Grid():
                 aggregated_array = getattr(np, 'nan%s' % func)(stacked_array, axis=0)
                 day_for_func = np.expand_dims(aggregated_array, axis = -1)
                 day_per_func[i_f].append(day_for_func)
-
-            return day_per_func    
+        
+        if heavy_bool :
+            # Prec can have this new special function that requires the whole day to be loaded as we're doing qunatile selection over the day 
+            # so we need to make the distributions of these rains. 
+            # Ain't really efficient should be done right after loading precips for other funcs but this happends in regrid_single_time_step so its boring..
+            # In fact, rather than making the use of regrid single time step, mean and max should also be computed that way. 
+            assert var_id == 'Prec'
+            var_day =[]
+            for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
+                var_day.append(self.casestudy.handler.load_var("Prec"))
+            var_day = xr.concat(var_day, dim='time') 
+            day_per_diag = self.get_heavy_data_from_center_to_global(var_day)
+            
+            if 'day_per_func' in locals() or 'day_per_func' in globals():
+                day_per_func += day_per_diag
+            else : 
+                day_per_func = day_per_diag
+                
+        return day_per_func    
 
 ### Add-ons methods for special regridding, should be simplified to help users
 
@@ -587,12 +627,10 @@ class Grid():
         X = np.full((self.n_lat, self.n_lon,n_MCS),np.nan)
         # X_counts = np.full((self.n_lat, self.n_lon,n_MCS),np.nan)
         
-        for i, slice_i_lat in enumerate(self.slices_i_lat):
-            
+        for i, slice_i_lat in enumerate(self.slices_i_lat): 
             if i%10 == 0: print(i,end='..')
             
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
-
                 if not self.fast :
                     x_subsets = [x[:,slice_i_lat, slice_j_lon], 
                              x[:,self.i_min[i,j], slice_j_lon]*self.alpha_i_min[i,j],
@@ -606,12 +644,10 @@ class Grid():
                     
                 elif self.fast :
                     x_subsets = [x[:,slice_i_lat, slice_j_lon]] # La 1ère dimension est celle du temps (i_t)
+                    
                 x_sub_unique = []
-                
                 for x_subset in x_subsets:
-                    
                     arr = np.array(x_subset).flatten()
-                    
                     unique, unique_counts = np.unique(arr[~np.isnan(arr)].astype(int),return_counts=True)
                     x_sub_unique.append(unique)
                 
@@ -621,3 +657,27 @@ class Grid():
                 # X_counts[i,j,:n_labs] = x_counts # How to combine counts from counts ?? linear combination using return_counts, return_index? That should be doable
                 
         return X#, X_counts
+    
+    def get_heavy_data_from_center_to_global(self, data_on_center):
+        x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values
+        print("Heavy Prec input data has shape ", x.shape)
+        mean_check = np.full((self.n_lat, self.n_lon), np.nan)
+        Alpha = np.full((self.n_lat, self.n_lon), np.nan)
+        Sigma = np.full((self.n_lat, self.n_lon), np.nan)
+        Rcond = np.full((self.n_lat, self.n_lon), np.nan)
+        for i, slice_i_lat in enumerate(self.slices_i_lat):
+            if i%10==0 : print(i, end='..')
+            for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
+                x_subset = np.sort(x[:, slice_i_lat, slice_j_lon].flatten()) # check that first dim is correctly time
+                i95 = np.percentile(x_subset, 95)
+                mean = np.mean(x_subset)
+                rcond95 = np.mean(x_subset[i95:])
+                sigma95 = len(x_subset[:i95])/len(x_subset[i95:])
+                alpha95 = rcond95*sigma95/mean
+                
+                mean_check[i,j] = mean
+                Alpha[i,j] = alpha95
+                Sigma[i,j] = sigma95
+                Rcond[i,j] = rcond95
+        
+        return [mean_check, Alpha, Sigma, Rcond]

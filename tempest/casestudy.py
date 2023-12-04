@@ -338,4 +338,3 @@ class CaseStudy():
             self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id["Prec"]
 
             return self.variables_names, self.days_i_t_per_var_id
-

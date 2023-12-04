@@ -87,31 +87,26 @@ class JointDistribution():
         
         if storm_tracking : 
             # Should check if regridded MCS labels is already stored in grid
-            self.labels_regridded = grid.get_var_id_ds("MCS_label")["MCS_label"]
-            self.labels_regridded_yxtm = np.swapaxes(self.labels_regridded,axis1=2,axis2=3).values # Est ce que ce ne serait pas intéressant de le construire comme ça direct ? 
+            self.labels_regridded_yxtm = grid.get_var_id_ds("MCS_label")["MCS_label"].values
             self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm),axis=3)
 
             # get storm tracking data
             if self.verbose : print("Loading storms...")
-            self.storms, self.label_storms = self.load_storms_tracking()
+            self.storms, self.label_storms, self.dict_i_storms_by_label = self.load_storms_tracking()
+            
+            ## TODO : you know what to do #settings #cleanthatmess
             if self.verbose : print("Retrieve labels in jdist")
-
-            self.i_storms = {}
-            for i, storm in enumerate(self.storms):
-                if storm.label not in self.i_storms.keys():
-                    self.i_storms[storm.label] = i
             self.labels_in_jdist = self.get_labels_in_jdist_bins(self)
-            ## TODO : you know what to do #settings
             self.wpwp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(130, 185))
             self.ep_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 50), slice(215, 280))
             self.atl_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 45), slice(290, 350))
-            # self.fk_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(10, 30), slice(160, 260))
-            # self.af_rf_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(340, 40))
+            self.epcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(10, 30), slice(160, 260))
+            self.af_rf_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(340, 40))
             self.io_wp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(20, 35), slice(55, 100),)
             self.se_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 45), slice(100, 130))
             self.ct_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(50, 60), slice(80, 120))
-            self.regions_labels_in_jdist = [self.wpwp_labels_in_jdist, self.ep_itcz_labels_in_jdist, self.atl_itcz_labels_in_jdist, 
-                                           self.io_wp_labels_in_jdist, self.se_as_labels_in_jdist, self.ct_as_labels_in_jdist]
+            self.regions_labels_in_jdist = [self.wpwp_labels_in_jdist, self.ep_itcz_labels_in_jdist, self.atl_itcz_labels_in_jdist, self.epcz_labels_in_jdist, 
+                                           self.af_rf_labels_in_jdist, self.io_wp_labels_in_jdist, self.se_as_labels_in_jdist, self.ct_as_labels_in_jdist]
 
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
@@ -519,12 +514,12 @@ class JointDistribution():
         dj = self.joint_digit(d1, d2)
         dj_3d = self.joint_digit(self.digit_3d_1, self.digit_3d_2)
         mask = dj_3d == dj
-        if regional : 
+        if regional:
             region_mask = np.zeros_like(mask, dtype = bool)
             if lat_slice is not None and lon_slice is not None:
                 if lon_slice.start < lon_slice.stop:
                     region_mask[lat_slice, lon_slice] = mask[lat_slice, lon_slice] 
-                elif lon_slice.stop < lon_slice.start : 
+                elif lon_slice.stop < lon_slice.start:
                     region_mask[lat_slice, slice(0, lon_slice.stop)]= mask[lat_slice, slice(0, lon_slice.stop)]
                     region_mask[lat_slice, slice(lon_slice.start, 360)]= mask[lat_slice, slice(lon_slice.start, 360)]
 
@@ -713,7 +708,7 @@ class JointDistribution():
         # return this fraction
         return bin_fraction_mcs, bin_noise
 
-    def plot_data(self, data, data_noise, cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None)):
+    def plot_data(self, data, data_noise = None, cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None)):
         self.make_mask()
         if fig==None and ax==None: 
             fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4.85))
@@ -736,7 +731,8 @@ class JointDistribution():
 
         # -- Density
         pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
-        show_joint_histogram(ax_show, Z_noise, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, alpha=0.1)
+        if data_noise is not None :
+            show_joint_histogram(ax_show, Z_noise, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, alpha=0.1)
 
         # -- Colorbar
         cb = fig.colorbar(pcm, ax=ax_show)
@@ -769,7 +765,11 @@ class JointDistribution():
         paths = glob.glob(os.path.join(self.settings['DIR_STORM_TRACKING'], '*.gz'))
         storms = load_toocan(paths[0])+load_toocan(paths[1])
         label_storms = [storms[i].label for i in range(len(storms))]
-        return storms, label_storms
+        dict_i_storms_by_label = {}
+        for i, storm in enumerate(storms):
+                if storm.label not in dict_i_storms_by_label.keys():
+                    dict_i_storms_by_label[storm.label] = i
+        return storms, label_storms, dict_i_storms_by_label
     
     def get_labels_in_jdist_bins(self, jdist, regional = False, lat_slice=None, lon_slice=None):
         """
