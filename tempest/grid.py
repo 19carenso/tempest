@@ -406,9 +406,10 @@ class Grid():
             print(f"These keys : {keys} have to be computed.")
             
             da_days_funcs = [[] for _ in funcs_to_compute]
+            if "heavy" in funcs_to_compute: da_days_funcs += [[], [], []] # mean_bis, alpha, sigma, rcond
             days = list(self.casestudy.days_i_t_per_var_id[var_id].keys())
             for day in days:
-                print(f"computing day {day}")
+                print(f"\n computing day {day} for funcs {funcs_to_compute}")
                 da_funcs = self.regrid_funcs_and_save_by_day(day, var_id, funcs_to_compute)
                 # if heavy is in funcs_to_compute, da_funcs will naturally have 4 items as if 3 more funcs but it's just 4 different keys
                 for i, da_func in enumerate(da_funcs):
@@ -418,7 +419,7 @@ class Grid():
             
             # Actually func heavy returns 4 keys
             if 'heavy' in funcs_to_compute:
-                keys += ["bis_mean_Prec", "Alpha_95", "Sigma_95", "Rcond_95"]
+                keys += ["Alpha_95", "Sigma_95", "bis_mean_Prec"]
                 
             for da_day, key in zip(da_days_funcs, keys) : 
             ## concat the list of dataarrays along days dimensions
@@ -447,16 +448,20 @@ class Grid():
         outputs_da = [] ##list of full day DataArray for each func (so typically of len 1 for MCS_label, 2 for any variable, 3 for Prec)
 
         var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
-        
+
         for var_regridded in  var_regridded_per_funcs:
             if var_id == 'MCS_label':  
-                n_MCS = var_regridded.shape[2]
+                n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
                 da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
                                         coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
                 
             else :
-                da_day = xr.DataArray(var_regridded[0], dims=['lat_global', 'lon_global', 'days'], 
-                                        coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
+                if isinstance(var_regridded, list):
+                    da_day = xr.DataArray(var_regridded[0], dims=['lat_global', 'lon_global', 'days'], 
+                                            coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
+                else : 
+                    da_day = xr.DataArray(var_regridded   , dims=['lat_global', 'lon_global', 'days'], 
+                                            coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
             outputs_da.append(da_day)
             
         del var_regridded_per_funcs
@@ -477,14 +482,14 @@ class Grid():
             list: A list of regridded data for each function in funcs_to_compute, in the same order.
 
         """
-
-        if 'heavy' in funcs_to_compute :
+        temp_funcs_to_compute  = copy.deepcopy(funcs_to_compute)
+        if 'heavy' in temp_funcs_to_compute :
             heavy_bool = True 
-            funcs_to_compute.remove('heavy')
+            temp_funcs_to_compute.remove('heavy')
         else : 
             heavy_bool = False
 
-        def regrid_single_time_step(i_t, var_id, funcs_to_compute):
+        def regrid_single_time_step(i_t, var_id, temp_funcs_to_compute):
             """
             Regrid data for a single time step.
 
@@ -500,7 +505,8 @@ class Grid():
 
             # Compute each func(var) for the current time step
             results = []
-            for func in funcs_to_compute:
+            print(temp_funcs_to_compute)
+            for func in temp_funcs_to_compute:
                 if var_current is not None:
                     var_regrid_idx = getattr(self, 'spatial_%s_data_from_center_to_global' % func)(var_current)
                 else:
@@ -525,20 +531,20 @@ class Grid():
             var_day = xr.concat(var_day,dim='time')
             
             labels_regrid = self.get_labels_data_from_center_to_global(var_day)
-            labels_regrid = np.expand_dims(labels_regrid, axis=3)
+            labels_regrid = np.expand_dims(labels_regrid, axis=2) # try to add the dim for day on second position so that MCS is on third for labels_yxtm
 
             del var_day 
             gc.collect()
 
             return [labels_regrid] # we put it into a list so that it is the same fashion than over variables that could have multiple funcs
 
-        else :
+        elif len(temp_funcs_to_compute)>0 :
                 
             # Loop over i_t, then loop over funcs_to_compute as to call regrid_single_time_step only once per i_t
-            all_i_t_for_day_per_func = [[] for _ in funcs_to_compute]
+            all_i_t_for_day_per_func = [[] for _ in temp_funcs_to_compute]
             for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
                 # Regrid time step for each func
-                results = regrid_single_time_step(i_t, var_id, funcs_to_compute)
+                results = regrid_single_time_step(i_t, var_id, temp_funcs_to_compute)
                 for i_f, result in enumerate(results):
                     all_i_t_for_day_per_func[i_f].append(result)
 
@@ -549,15 +555,22 @@ class Grid():
             # This stacking-aggregation is dependent of funcs to compute,
             # don't forget to modify this step if you're adding a new function 
             # or to include it in the method/function... at day level then.
-            day_per_func = [[] for _ in funcs_to_compute]
+            day_per_func = [[] for _ in temp_funcs_to_compute]
 
-            for i_f, func in enumerate(funcs_to_compute):
+            for i_f, func in enumerate(temp_funcs_to_compute):
                 stacked_array = np.stack(all_i_t_for_day_per_func[i_f], axis=0)
                 aggregated_array = getattr(np, 'nan%s' % func)(stacked_array, axis=0)
                 day_for_func = np.expand_dims(aggregated_array, axis = -1)
                 day_per_func[i_f].append(day_for_func)
-        
+                
+            #maybe i'm overdoing it there
+            del stacked_array
+            del aggregated_array
+            del day_for_func
+            gc.collect()
+
         if heavy_bool :
+            print("doing heavy for day", day)
             # Prec can have this new special function that requires the whole day to be loaded as we're doing qunatile selection over the day 
             # so we need to make the distributions of these rains. 
             # Ain't really efficient should be done right after loading precips for other funcs but this happends in regrid_single_time_step so its boring..
@@ -565,7 +578,7 @@ class Grid():
             assert var_id == 'Prec'
             var_day =[]
             for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
-                var_day.append(self.casestudy.handler.load_var("Prec"))
+                var_day.append(self.casestudy.handler.load_var(self, var_id, i_t))
             var_day = xr.concat(var_day, dim='time') 
             day_per_diag = self.get_heavy_data_from_center_to_global(var_day)
             
@@ -659,8 +672,7 @@ class Grid():
         return X#, X_counts
     
     def get_heavy_data_from_center_to_global(self, data_on_center):
-        x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values
-        print("Heavy Prec input data has shape ", x.shape)
+        x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values #1st axis becomes time
         mean_check = np.full((self.n_lat, self.n_lon), np.nan)
         Alpha = np.full((self.n_lat, self.n_lon), np.nan)
         Sigma = np.full((self.n_lat, self.n_lon), np.nan)
@@ -668,16 +680,20 @@ class Grid():
         for i, slice_i_lat in enumerate(self.slices_i_lat):
             if i%10==0 : print(i, end='..')
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
-                x_subset = np.sort(x[:, slice_i_lat, slice_j_lon].flatten()) # check that first dim is correctly time
-                i95 = np.percentile(x_subset, 95)
+                x_subset = np.sort(x[:, slice_i_lat, slice_j_lon].flatten()) 
+                perc_95 = np.percentile(x_subset, 95)
                 mean = np.mean(x_subset)
-                rcond95 = np.mean(x_subset[i95:])
-                sigma95 = len(x_subset[:i95])/len(x_subset[i95:])
-                alpha95 = rcond95*sigma95/mean
+                rcond95 = np.mean(x_subset[x_subset>perc_95])
+                sigma95 = np.sum(x_subset>perc_95)/len(x_subset)
+                alpha95 = (rcond95*sigma95)/mean
                 
                 mean_check[i,j] = mean
                 Alpha[i,j] = alpha95
                 Sigma[i,j] = sigma95
                 Rcond[i,j] = rcond95
-        
-        return [mean_check, Alpha, Sigma, Rcond]
+        # expand so that we can concatenate futur dataarrays along day dim
+        return [np.expand_dims(Rcond, axis =-1), # Is called heavy_Prec afterward because of how key works
+                np.expand_dims(Alpha, axis = -1), 
+                np.expand_dims(Sigma, axis =-1),
+                np.expand_dims(mean_check, axis = -1)
+                ]

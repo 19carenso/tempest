@@ -53,7 +53,7 @@ class JointDistribution():
 
         cwd = os.getcwd()
         rel_dir_out = self.settings["DIR_OUT"]
-        abs_dir_out = os.path.join(cwd, self.settings["DIR_OUT"])
+        abs_dir_out = os.path.join(cwd, rel_dir_out)
         self.dir_out = os.path.join(abs_dir_out, self.name)
         if not os.path.exists(self.dir_out):
             print("First instance of this Joint Distribution, so setting overwrite to true")
