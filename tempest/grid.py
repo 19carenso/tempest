@@ -505,7 +505,6 @@ class Grid():
 
             # Compute each func(var) for the current time step
             results = []
-            print(temp_funcs_to_compute)
             for func in temp_funcs_to_compute:
                 if var_current is not None:
                     var_regrid_idx = getattr(self, 'spatial_%s_data_from_center_to_global' % func)(var_current)

@@ -24,7 +24,7 @@ class JointDistribution():
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, nd=4, storm_tracking = True, overwrite=False, verbose = False):
+    def __init__(self, grid, nd=4, heavy_bool = False, storm_tracking = True, overwrite=False, verbose = False):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -37,6 +37,7 @@ class JointDistribution():
         self.verbose = verbose
         self.name = grid.casestudy.name
         self.settings = grid.settings
+        self.heavy_bool = heavy_bool 
         
         self.nd = nd
 
@@ -47,7 +48,10 @@ class JointDistribution():
         self.shape = np.shape(self.prec["mean_Prec"].to_numpy())
         
         self.sample1 = self.prec["mean_Prec"].to_numpy().ravel()
-        self.sample2 = self.prec["max_Prec"].to_numpy().ravel()
+        if heavy_bool : 
+            self.sample2 = self.prec["heavy_Prec"].to_numpy().ravel()
+        else:
+            self.sample2 = self.prec["max_Prec"].to_numpy().ravel()
 
         self.overwrite = overwrite
 
@@ -137,7 +141,7 @@ class JointDistribution():
     def get_distribs(self):
         name_dist1 = self.name + '_' + 'mean_Prec'
         path_dist1 = os.path.join(self.dir_out, name_dist1)
-        name_dist2 = self.name + '_' + 'max_Prec'
+        name_dist2 = self.name + '_' + 'heavy_Prec' if self.heavy_bool else 'max_Prec' 
         path_dist2 = os.path.join(self.dir_out, name_dist2)
 
         if self.overwrite:
@@ -708,18 +712,18 @@ class JointDistribution():
         # return this fraction
         return bin_fraction_mcs, bin_noise
 
-    def plot_data(self, data, data_noise = None, cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None)):
+    def plot_data(self, data, data_noise = None, scale = 'linear', cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None)):
         self.make_mask()
+        
         if fig==None and ax==None: 
             fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4.85))
         
         Z_nd = self.norm_density.T
         Z = data.T
-        Z_noise = data_noise.T
+        
 
         # Should be passed as **kwargs
         title = f"Data over Normalized density"
-        scale = 'linear'
         cmap = cmap
 
         # -- Frame
@@ -732,6 +736,7 @@ class JointDistribution():
         # -- Density
         pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
         if data_noise is not None :
+            Z_noise = data_noise.T
             show_joint_histogram(ax_show, Z_noise, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, alpha=0.1)
 
         # -- Colorbar
