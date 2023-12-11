@@ -5,6 +5,7 @@ import sys
 import glob
 import csv
 import pickle
+import time
 
 from math import log10
 from skimage import measure # pylance: disable=import-error 
@@ -24,7 +25,7 @@ class JointDistribution():
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, nd=4, heavy_bool = False, storm_tracking = True, overwrite=False, verbose = False):
+    def __init__(self, grid, nd=4, var_id_1 = "mean_Prec", var_id_2 = "max_Prec", storm_tracking = True, overwrite=False, verbose = False, regionalize = False):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -37,8 +38,9 @@ class JointDistribution():
         self.verbose = verbose
         self.name = grid.casestudy.name
         self.settings = grid.settings
-        self.heavy_bool = heavy_bool 
-        
+        self.var_id_1 = var_id_1
+        self.var_id_2 = var_id_2
+        self.regionalize = regionalize
         self.nd = nd
 
         self.ditvi = grid.casestudy.days_i_t_per_var_id
@@ -47,11 +49,8 @@ class JointDistribution():
         
         self.shape = np.shape(self.prec["mean_Prec"].to_numpy())
         
-        self.sample1 = self.prec["mean_Prec"].to_numpy().ravel()
-        if heavy_bool : 
-            self.sample2 = self.prec["heavy_Prec"].to_numpy().ravel()
-        else:
-            self.sample2 = self.prec["max_Prec"].to_numpy().ravel()
+        self.sample1 = self.prec[var_id_1].to_numpy().ravel()
+        self.sample2 = self.prec[var_id_2].to_numpy().ravel()
 
         self.overwrite = overwrite
 
@@ -89,28 +88,29 @@ class JointDistribution():
             print("Overwrite set to false so loading basics attributes from .npy")
             self.load_from_npy()
         
-        if storm_tracking : 
-            # Should check if regridded MCS labels is already stored in grid
+
+        ## Make a class out of this so that it only has to be loaded once (super long like 30sec to 2mins....)
+        if storm_tracking:
+            start_time = time.time()
+
+            # Should check if regridded MCS labels are already stored in grid
             self.labels_regridded_yxtm = grid.get_var_id_ds("MCS_label")["MCS_label"].values
-            self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm),axis=3)
+            self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm), axis=3)
 
             # get storm tracking data
-            if self.verbose : print("Loading storms...")
+            print("Loading storms...")
             self.storms, self.label_storms, self.dict_i_storms_by_label = self.load_storms_tracking()
+
+            print(f"Time elapsed for loading storms: {time.time() - start_time:.2f} seconds")
+
+            ## TODO: you know what to do #settings #cleanthatmess
+            if self.verbose:
+                print("Retrieve labels in jdist")
             
-            ## TODO : you know what to do #settings #cleanthatmess
-            if self.verbose : print("Retrieve labels in jdist")
+            start_time = time.time()
             self.labels_in_jdist = self.get_labels_in_jdist_bins(self)
-            self.wpwp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(130, 185))
-            self.ep_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 50), slice(215, 280))
-            self.atl_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 45), slice(290, 350))
-            self.epcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(10, 30), slice(160, 260))
-            self.af_rf_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(340, 40))
-            self.io_wp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(20, 35), slice(55, 100),)
-            self.se_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 45), slice(100, 130))
-            self.ct_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(50, 60), slice(80, 120))
-            self.regions_labels_in_jdist = [self.wpwp_labels_in_jdist, self.ep_itcz_labels_in_jdist, self.atl_itcz_labels_in_jdist, self.epcz_labels_in_jdist, 
-                                           self.af_rf_labels_in_jdist, self.io_wp_labels_in_jdist, self.se_as_labels_in_jdist, self.ct_as_labels_in_jdist]
+            print(f"Time elapsed for propagating all labels: {time.time() - start_time:.2f} seconds")
+            if self.regionalize : self.get_labels_per_region()
 
     def __repr__(self):
         """Creates a printable version of the Distribution object. Only prints the 
@@ -139,9 +139,9 @@ class JointDistribution():
         return str_out
 
     def get_distribs(self):
-        name_dist1 = self.name + '_' + 'mean_Prec'
+        name_dist1 = self.name + '_' + self.var_id_1
         path_dist1 = os.path.join(self.dir_out, name_dist1)
-        name_dist2 = self.name + '_' + 'heavy_Prec' if self.heavy_bool else 'max_Prec' 
+        name_dist2 = self.name + '_' + self.var_id_2
         path_dist2 = os.path.join(self.dir_out, name_dist2)
 
         if self.overwrite:
@@ -182,6 +182,20 @@ class JointDistribution():
             attr_filename = attr + '.npy'
             attr_file_path = os.path.join(self.jd_path, attr_filename)
             np.save(attr_file_path, value)
+
+    def get_labels_per_region(self):
+        start_time = time.time()
+        self.wpwp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(130, 185))
+        self.ep_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 50), slice(215, 280))
+        self.atl_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 45), slice(290, 350))
+        self.epcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(10, 30), slice(160, 260))
+        self.af_rf_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(340, 40))
+        self.io_wp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(20, 35), slice(55, 100),)
+        self.se_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 45), slice(100, 130))
+        self.ct_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(50, 60), slice(80, 120))
+        self.regions_labels_in_jdist = [self.wpwp_labels_in_jdist, self.ep_itcz_labels_in_jdist, self.atl_itcz_labels_in_jdist, self.epcz_labels_in_jdist, 
+                                    self.af_rf_labels_in_jdist, self.io_wp_labels_in_jdist, self.se_as_labels_in_jdist, self.ct_as_labels_in_jdist]
+        print(f"Time elapsed for loading regions labels: {time.time() - start_time:.2f} seconds")
 
     def load_from_npy(self):
         """
@@ -372,7 +386,7 @@ class JointDistribution():
 
         if data is not None : data_over_density = np.zeros(shape=(l1,l2))
 
-        for i2 in range(1,l2): 
+        for i2 in range(l2): 
             if data is not None: ## TEST AND DEBUG THIS
                 for i1 in range(l1):
                     data_idx = tuple(np.argwhere((digit1==i1) & (digit2==i2)).T)
@@ -767,8 +781,17 @@ class JointDistribution():
         return ax
 
     def load_storms_tracking(self):
-        paths = glob.glob(os.path.join(self.settings['DIR_STORM_TRACKING'], '*.gz'))
-        storms = load_toocan(paths[0])+load_toocan(paths[1])
+        dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
+        file_storms = os.path.join(self.settings["DIR_DATA_OUT"], "storms.pkl")
+        if os.path.exists(file_storms):
+            print("loading storms from pkl")
+            with open(file_storms, 'rb') as file:
+                storms = pickle.load(file)
+        else : 
+            paths = glob.glob(os.path.join(self.settings['DIR_STORM_TRACKING'], '*.gz'))
+            storms = load_toocan(paths[0])+load_toocan(paths[1])
+            with open(file_storms, 'wb') as file:
+                pickle.dump(storms, file)
         label_storms = [storms[i].label for i in range(len(storms))]
         dict_i_storms_by_label = {}
         for i, storm in enumerate(storms):

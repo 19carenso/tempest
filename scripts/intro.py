@@ -22,9 +22,9 @@ gr = grid.Grid(cs, fast = True, overwrite= False, verbose_steps = True, verbose 
 
 if __name__ == '__main__':
 
-    # gr.compute_funcs_for_var_id("Prec")
+    gr.compute_funcs_for_var_id("Prec")
 
-    jd = joint_distrib.JointDistribution(gr, nd= 3, overwrite = False, storm_tracking = True)
+    # jd = joint_distrib.JointDistribution(gr, nd= 3, overwrite = False, storm_tracking = True)
 
     # gr.compute_funcs_for_var_id("OM500") ## by default calls var_id = 'Prec'
     # gr.compute_funcs_for_var_id("OM700") ## by default calls var_id = 'Prec'

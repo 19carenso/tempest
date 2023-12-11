@@ -378,7 +378,7 @@ class Grid():
         keys_loaded = [key for key in list(var_ds.variables) if var_id in key] 
         
         if var_id == "Prec" :
-            funcs = self.func_names + ["heavy"]
+            funcs = self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
         else: 
             funcs = self.func_names
         
@@ -395,6 +395,17 @@ class Grid():
             else :
                 funcs_to_compute.append(func_name) 
                 keys.append(key) 
+                            
+                if 'heavy' == func_name: # Actually func heavy returns 4 keys
+                    keys += ["Alpha_95", "Sigma_95", "bis_mean_Prec"]
+                if "supra" == func_name:
+                    keys += ["Alpha_99", "Sigma_99"]
+                if "ultra" == func_name:
+                    keys+= ["Alpha_99_99", "Sigma_99_99"]
+                if "wet" == func_name:
+                    keys+= ["Alpha_1mm_per_h", "Sigma_1mm_per_h"]
+                if "convective" == func_name:
+                    keys+= ["Alpha_99_99_native", "Sigma_99_99_native"]
         
         # Overide - If var_id is MCS (or maybe later contains MCS) - the funcs and keys to only compute the MCS_label
         if var_id == "MCS_label" : 
@@ -406,7 +417,12 @@ class Grid():
             print(f"These keys : {keys} have to be computed.")
             
             da_days_funcs = [[] for _ in funcs_to_compute]
-            if "heavy" in funcs_to_compute: da_days_funcs += [[], [], []] # mean_bis, alpha, sigma, rcond
+            if "heavy" in funcs_to_compute: da_days_funcs += [[], [], []] # mean_bis, alpha95, sigma95
+            if "supra" in funcs_to_compute: da_days_funcs += [[], []] # alpha99, sigma99
+            if "ultra" in funcs_to_compute: da_days_funcs += [[], []] #alpha99.99, sigma99.99
+            if "wet"   in funcs_to_compute: da_days_funcs += [[], []] #alpha1mm, sigma1mm
+            if "convective" in funcs_to_compute: da_days_funcs += [[], []]
+            
             days = list(self.casestudy.days_i_t_per_var_id[var_id].keys())
             for day in days:
                 print(f"\n computing day {day} for funcs {funcs_to_compute}")
@@ -416,11 +432,7 @@ class Grid():
                     da_days_funcs[i].append(da_func)
                 del da_funcs
                 gc.collect()
-            
-            # Actually func heavy returns 4 keys
-            if 'heavy' in funcs_to_compute:
-                keys += ["Alpha_95", "Sigma_95", "bis_mean_Prec"]
-                
+
             for da_day, key in zip(da_days_funcs, keys) : 
             ## concat the list of dataarrays along days dimensions
                 da_var_regrid = xr.concat(da_day, dim = 'days')
@@ -488,6 +500,30 @@ class Grid():
             temp_funcs_to_compute.remove('heavy')
         else : 
             heavy_bool = False
+
+        if 'supra' in temp_funcs_to_compute :
+            supra_bool = True
+            temp_funcs_to_compute.remove('supra')
+        else:
+            supra_bool = False
+
+        if 'ultra' in temp_funcs_to_compute:
+            ultra_bool = True
+            temp_funcs_to_compute.remove('ultra') 
+        else:
+             ultra_bool = False
+        
+        if 'wet' in temp_funcs_to_compute:
+            wet_bool = True
+            temp_funcs_to_compute.remove('wet') 
+        else:
+             wet_bool = False
+
+        if 'convective' in temp_funcs_to_compute:
+            convective_bool = True
+            temp_funcs_to_compute.remove('convective') 
+        else:
+             convective_bool = False
 
         def regrid_single_time_step(i_t, var_id, temp_funcs_to_compute):
             """
@@ -568,8 +604,8 @@ class Grid():
             del day_for_func
             gc.collect()
 
-        if heavy_bool :
-            print("doing heavy for day", day)
+        if heavy_bool or supra_bool or ultra_bool or wet_bool or convective_bool:
+            print("loading whole day data for day", day, "for heavy/supra/ultra/wet/convective")
             # Prec can have this new special function that requires the whole day to be loaded as we're doing qunatile selection over the day 
             # so we need to make the distributions of these rains. 
             # Ain't really efficient should be done right after loading precips for other funcs but this happends in regrid_single_time_step so its boring..
@@ -579,15 +615,29 @@ class Grid():
             for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
                 var_day.append(self.casestudy.handler.load_var(self, var_id, i_t))
             var_day = xr.concat(var_day, dim='time') 
-            day_per_diag = self.get_heavy_data_from_center_to_global(var_day)
-            
+            day_per_diag = []
+            if heavy_bool : 
+                print("compute heavy for day", day)
+                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 95, True)
+            if supra_bool : 
+                print("compute supra for day", day)
+                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 99, True)
+            if ultra_bool : 
+                print("compute ultra for day", day)
+                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 99.9, True)
+            if wet_bool : 
+                print("compute wet for day", day)
+                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 1, False)
+            if convective_bool : 
+                print("compute convective for day", day)
+                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 32.19467629011342, False)    
+
             if 'day_per_func' in locals() or 'day_per_func' in globals():
                 day_per_func += day_per_diag
             else : 
-                day_per_func = day_per_diag
-                
-        return day_per_func    
+                day_per_func = day_per_diag   
 
+        return day_per_func
 ### Add-ons methods for special regridding, should be simplified to help users
 
     def spatial_mean_data_from_center_to_global(self, data_on_center):
@@ -670,7 +720,7 @@ class Grid():
                 
         return X#, X_counts
     
-    def get_heavy_data_from_center_to_global(self, data_on_center):
+    def get_tail_data_from_center_to_global(self, data_on_center, treshold, is_relative):
         x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values #1st axis becomes time
         mean_check = np.full((self.n_lat, self.n_lon), np.nan)
         Alpha = np.full((self.n_lat, self.n_lon), np.nan)
@@ -680,19 +730,26 @@ class Grid():
             if i%10==0 : print(i, end='..')
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
                 x_subset = np.sort(x[:, slice_i_lat, slice_j_lon].flatten()) 
-                perc_95 = np.percentile(x_subset, 95)
+                perc = np.percentile(x_subset, treshold) if is_relative else treshold
                 mean = np.mean(x_subset)
-                rcond95 = np.mean(x_subset[x_subset>perc_95])
-                sigma95 = np.sum(x_subset>perc_95)/len(x_subset)
-                alpha95 = (rcond95*sigma95)/mean
+                rcond = np.mean(x_subset[x_subset>perc])
+                sigma = np.sum(x_subset>perc)/len(x_subset)
+                alpha = (rcond*sigma)/mean
                 
                 mean_check[i,j] = mean
-                Alpha[i,j] = alpha95
-                Sigma[i,j] = sigma95
-                Rcond[i,j] = rcond95
-        # expand so that we can concatenate futur dataarrays along day dim
-        return [np.expand_dims(Rcond, axis =-1), # Is called heavy_Prec afterward because of how key works
+                Alpha[i,j] = alpha
+                Sigma[i,j] = sigma
+                Rcond[i,j] = rcond
+
+        if treshold == 95 : 
+            output = [np.expand_dims(Rcond, axis =-1), # Is called heavy_Prec afterward because of how key works
+                    np.expand_dims(Alpha, axis = -1), 
+                    np.expand_dims(Sigma, axis =-1),
+                    np.expand_dims(mean_check, axis = -1)]
+        else:
+            output= [np.expand_dims(Rcond, axis =-1), # Is called heavy_Prec afterward because of how key works
                 np.expand_dims(Alpha, axis = -1), 
-                np.expand_dims(Sigma, axis =-1),
-                np.expand_dims(mean_check, axis = -1)
-                ]
+                np.expand_dims(Sigma, axis =-1)]        
+        
+        # expand so that we can concatenate futur dataarrays along day dim
+        return output
