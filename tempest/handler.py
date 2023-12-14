@@ -19,7 +19,8 @@ class Handler():
 
         self.rel_table = self.load_rel_table(self.settings['REL_TABLE'])
 
-    def load_seg(self, i_t):
+    def load_seg(self, grid, i_t):
+        ## no need for  grid but allos dynamic catch in same behavior than for other variables
         path_toocan = self.rel_table.loc[self.rel_table['Unnamed: 0.1'] == i_t-1, 'img_seg_path']
         if len(path_toocan)==1 : path_toocan = '/' + path_toocan.values[0]
         else : print('Rel_table has a problem')
@@ -27,16 +28,14 @@ class Handler():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
             img_toocan = xr.open_dataarray(path_toocan, engine='netcdf4')
         return img_toocan
-    
-    def load_seg_tb_feng(self, i_t):
-        path_toocan = self.get_filename_tb_feng(i_t)
-        if len(path_toocan)==1 : path_toocan = '/' + path_toocan.values[0]
-        else : print('Rel_table has a problem')
+
+    def load_seg_tb_feng(self, grid, i_t):
+        path_toocan = self.get_filename_tb_feng(i_t) ## There is the differences
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataarray(path_toocan, engine='netcdf4')
+            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask
         return img_toocan
-    
+
     def i_t_from_utc(self, utc):
         #path_dyamond = self.get_rootname_from_i_t(i_t)
         i_t = self.rel_table.loc[self.rel_table["UTC"] == utc, 'Unnamed: 0'].values
@@ -66,7 +65,6 @@ class Handler():
         string_timestamp = str(int(int(i_t) * 240)).zfill(10)
         result = f"DYAMOND_9216x4608x74_7.5s_4km_4608_"+string_timestamp
         return result
-
 
     def get_filename_tb_feng(self, i_t):
         root = "/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/TOOCAN_Olr-Tb_Feng/TOOCAN_v2.07/GLOBAL/2016/"
@@ -181,7 +179,10 @@ class Handler():
         del current_precac
         gc.collect()
         return prec
-    
+
+    def load_prec_minus_1(self, grid, i_t):
+        return self.load_prec(grid, i_t)
+
     def compute_qv_sat(self, grid, i_t):
         pp = self.load_var(grid, "PP", i_t)
         tabs = self.load_var(grid, "TABS", i_t)

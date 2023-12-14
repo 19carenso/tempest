@@ -29,7 +29,11 @@ class StormTracker():
         self.overwrite = overwrite 
         self.verbose = verbose
         self.label_var_id = label_var_id
-        # Should check if regridded MCS labels are already stored in grid
+        if self.label_var_id == 'MCS_label':
+            self.dir_storm = self.settings['DIR_STORM_TRACKING']
+        elif self.label_var_id == 'MCS_label_Tb_Feng'    :
+            self.dir_storm = self.settings['DIR_STORM_TRACKING_TB_FENG']
+                # Should check if regridded MCS labels are already stored in grid
         self.labels_regridded_yxtm = grid.get_var_id_ds(self.label_var_id)[self.label_var_id].values
         self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm), axis=3)
 
@@ -47,13 +51,13 @@ class StormTracker():
     def load_storms_tracking(self):
         ## Make it a netcdf so that we don't struggle with loading it anymore
         dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
-        file_storms = os.path.join(dir_out, "storms.pkl")
+        file_storms = os.path.join(dir_out, "storms"+self.label_var_id+".pkl")
         if os.path.exists(file_storms):
             print("loading storms from pkl")
             with open(file_storms, 'rb') as file:
                 storms = pickle.load(file)
         else : 
-            paths = glob.glob(os.path.join(self.settings['DIR_STORM_TRACKING'], '*.gz'))
+            paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
             storms = load_toocan(paths[0])+load_toocan(paths[1])
             with open(file_storms, 'wb') as file:
                 pickle.dump(storms, file)
@@ -67,7 +71,7 @@ class StormTracker():
     def save_storms(self):
         dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
         file_storms = os.path.join(dir_out, "storms.pkl")
-        paths = glob.glob(os.path.join(self.settings['DIR_STORM_TRACKING'], '*.gz'))
+        paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
         storms = load_toocan(paths[0])+load_toocan(paths[1])
         with open(file_storms, 'wb') as file:
             pickle.dump(storms, file)

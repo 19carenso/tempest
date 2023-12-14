@@ -365,7 +365,7 @@ class Grid():
 ## Kinda an issue that there is 3 funcs to basically do the same thing
 ## One will be removed when we get rid off the .pkl
 
-    def compute_funcs_for_var_id(self, var_id='Prec'):
+    def compute_funcs_for_var_id(self, var_id='Prec', overwrite_var_id = False):
         """
         Save to netcdf all the funcs to apply to var_id, that were not already a key. 
         """
@@ -383,13 +383,14 @@ class Grid():
         funcs_to_compute = []
         for func_name in funcs: # for now func_names is the same for all var_id, but it should be updated in a json to be in the same fashion that days_i_t_per_var_id
             key = '%s_%s'%(func_name,var_id)
-            if key in keys_loaded : 
-                print('%s already computed, skipping...'%key)
+            if key in keys_loaded and not overwrite_var_id: 
+                if not overwrite_var_id : print('%s already computed, skipping...'%key)
                 # Here it should actually make another check that'd look at the days asked for computation in ditvi and compare to the one stored. 
                 # making a temp ditvi with only missing days to compute for this var would then be great
                 # Would required a to_complete bool tp then adapt the saving of computed days
                 continue
             else :
+                if overwrite_var_id : print("compute var_id again because of overwrite parameter")
                 funcs_to_compute.append(func_name) 
                 keys.append(key) 
                             
@@ -559,7 +560,7 @@ class Grid():
             
             var_day = []
             for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
-                var_day.append(self.casestudy.handler.load_seg(i_t)) # This loads quite a lot into memory. and where chunks couldcome usefull
+                var_day.append(self.casestudy.handler.load_var(self, var_id, i_t)) # This loads quite a lot into memory. and where chunks couldcome usefull
             var_day = xr.concat(var_day,dim='time')
             
             labels_regrid = self.get_labels_data_from_center_to_global(var_day)

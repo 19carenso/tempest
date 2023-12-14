@@ -22,7 +22,8 @@ gr = grid.Grid(cs, fast = True, overwrite = True, verbose_steps = True, verbose 
 
 if __name__ == '__main__':
 
-    gr.compute_funcs_for_var_id("MCS_label_Tb_Feng")
+    # gr.compute_funcs_for_var_id("MCS_label_Tb_Feng", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("Prec_t_minus_1", overwrite_var_id=True)
 
     # jd = joint_distrib.JointDistribution(gr, nd= 5, overwrite = False, storm_tracking = True)
 

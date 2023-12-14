@@ -243,15 +243,31 @@ class CaseStudy():
 
             dependency is a list of either directly original or new var_id, but it can also contain a +n or -n as to specify an offset in its indexes 
             e.g. :  Prec = Precac - Precac-1 ; dependencies["Prec"] = ["Precac", "Precac-1"]
+
+            ### TODO : kaje it work for Prec_t_minus_1 that depends on ["Precac-2", "Precac-1"] cuz for now dates doesn't work and the rest seems blurry
             """
             ddates = []
             for dvar_id in dependency:
-                ## Maybe if finally the date is empty of any i_t should be removed from the keys! even if it should not propagate any issue
+                ## Maybe if finally the date is empty of any i_t should be removed from the keys! even if it should not propagate any issue      
                 if "+" in dvar_id or "-" in dvar_id:
-                    continue 
+                    ddates.append(list(self.days_i_t_per_var_id[dvar_id[:-2]].keys()))
+                    if "-" in dvar_id:
+                        # this just has to add end dates if data is actually available further
+                        offset = self.handler.extract_digit_after_sign(dvar_id)
+                        last_date = list(self.days_i_t_per_var_id[dvar_id[:-2]].keys())[-1]
+                        last_i_t_last_date = self.days_i_t_per_var_id[dvar_id[:-2]][last_date][-1]
+
+                        if last_i_t_last_date+offset // 48 == 0 : # then add one more day
+                            day_int = int(last_date[6:8])
+                            if day_int != 31 :
+                                new_day = day_int + 1
+                            new_day_str = last_date[:6]+str(new_day).zfill(2)
+                            ddates.append(new_day_str)
                 else : 
                     ddates.append(list(self.days_i_t_per_var_id[dvar_id].keys()))
-            dates = reduce(lambda x, y: list(set(x) & set(y)), ddates)
+
+            if len(ddates)>0:
+                dates = reduce(lambda x, y: list(set(x) & set(y)), ddates)
 
             i_t_per_date = []
             for i_date, date in enumerate(dates):
@@ -263,10 +279,11 @@ class CaseStudy():
                             prev_date = dates[i_date-1]
                             prev_date_indexes = []
                             for i in range(offset):
+                                #[-2] is to avoid the +int at the end of var_id
                                 prev_date_indexes.append(self.days_i_t_per_var_id[dvar_id[:-2]][prev_date][-(i+1)]+offset)
-                        this_date_indexes = [self.days_i_t_per_var_id[dvar_id[:-2]][date][i]+1 for i in range(1+len(self.days_i_t_per_var_id[dvar_id[:-2]][date])-offset)]
+                        this_date_indexes = [self.days_i_t_per_var_id[dvar_id[:-2]][date][i]+offset for i in range(1+len(self.days_i_t_per_var_id[dvar_id[:-2]][date])-offset)]
                         
-                        if i_date !=0 : 
+                        if i_date !=0: 
                             dindexes.append(prev_date_indexes+this_date_indexes)
                         else : 
                             dindexes.append(this_date_indexes)
@@ -289,6 +306,8 @@ class CaseStudy():
                 dependency = dependencies[var_id]
 
                 if var_id not in self.variables_names: self.variables_names.append(var_id)
+                print(var_id)
+
                 if len(dependency) > 0 : # If you add new variables that have no dependency you must create your own function to load them 
                                          # and update ditvi like with add_storm_tracking_variables
                     self.days_i_t_per_var_id = _update_ditvi(var_id, dependency)
@@ -324,7 +343,9 @@ class CaseStudy():
         """
         if "MCS_label" not in self.variables_names:
             self.variables_names.append("MCS_label")
-
+        
+        if "MCS_label_Tb_Feng" not in self.variables_names:
+            self.variables_names.append("MCS_label_Tb_Feng")
         # let's get rid off rel_table because of duplicates issue (not quantified)
         # if vanilla :
         #     # I love SQL time

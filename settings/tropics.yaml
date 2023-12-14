@@ -22,9 +22,12 @@ DIR_DATA_3D_IN: '/bdd/DYAMOND/SAM-4km/OUT_3D'
 # I don't like this one
 DIR_DATA2: '/homedata/mcarenso/DYAMOND_REGIONS/tropics/SAM/diagnostics_2D'
 
-DIR_TOOCANSEG_DYAMOND: null #??
+# This is specific to first TOOCAN Run
 DIR_STORM_TRACKING: '/data/fiolleau/DYAMOND/TOOCAN/TOOCAN_v2.07/GLOBAL/2016/FileTracking'
 REL_TABLE: "input/relation_2_table_UTC_dyamond_segmentation.csv"
+
+# Nouveau run TOOCAN Tb_Feng
+DIR_STORM_TRACKING_TB_FENG: '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/TOOCAN_Olr-Tb_Feng/TOOCAN_v2.07/GLOBAL/2016/FileTracking/'
 
 
 
@@ -59,6 +62,7 @@ new_var: ## These list and dict must be sorted by dependency
   variables_id:
     [
       "Prec", 
+      "Prec_t_minus_1",
       "MCS_label", 
       "MCS_label_Tb_Feng",
       "QV_sat",
@@ -68,6 +72,7 @@ new_var: ## These list and dict must be sorted by dependency
   dependencies:
     {
       "Prec" : ["Precac", "Precac-1"], 
+      "Prec_t_minus_1" : ["Precac-1", "Precac-2"],
       "MCS_label" : [],
       "MCS_label_Tb_Feng" : [],
       "QV_sat" : ["PP", "TABS"], 
@@ -77,6 +82,7 @@ new_var: ## These list and dict must be sorted by dependency
   functions:
     {
       "Prec" : "load_prec",
+      "Prec_t_minus_1" : "load_prec_minus_1",
       "MCS_label" : "load_seg",
       "MCS_label_Tb_Feng" : "load_seg_tb_feng",
       "QV_sat" : "compute_qv_sat", 
