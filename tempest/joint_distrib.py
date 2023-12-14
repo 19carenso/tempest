@@ -7,13 +7,12 @@ import csv
 import pickle
 import time
 
-from math import log10
 from skimage import measure # pylance: disable=import-error 
 from scipy.optimize import curve_fit
 import warnings
 
 from .distribution import Distribution
-from .load_toocan import load_toocan
+# from .load_toocan import load_toocan
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -25,7 +24,7 @@ class JointDistribution():
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, nd=4, var_id_1 = "mean_Prec", var_id_2 = "max_Prec", storm_tracking = True, overwrite=False, verbose = False, regionalize = False):
+    def __init__(self, grid, storm_tracker = None, nd=4, var_id_1 = "mean_Prec", var_id_2 = "max_Prec", overwrite=False, verbose = False, regionalize = False):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -90,23 +89,16 @@ class JointDistribution():
         
 
         ## Make a class out of this so that it only has to be loaded once (super long like 30sec to 2mins....)
-        if storm_tracking:
-            start_time = time.time()
+        if storm_tracker is not None:
+            # is this best practice ?
+            self.storms = storm_tracker.storms
+            self.label_storms = storm_tracker.label_storms
+            self.dict_i_storms_by_label = storm_tracker.dict_i_storms_by_label
+            self.labels_regridded_yxtm = storm_tracker.labels_regridded_yxtm
+            self.mask_labels_regridded_yxt = storm_tracker.mask_labels_regridded_yxt
 
-            # Should check if regridded MCS labels are already stored in grid
-            self.labels_regridded_yxtm = grid.get_var_id_ds("MCS_label")["MCS_label"].values
-            self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm), axis=3)
-
-            # get storm tracking data
-            print("Loading storms...")
-            self.storms, self.label_storms, self.dict_i_storms_by_label = self.load_storms_tracking()
-
-            print(f"Time elapsed for loading storms: {time.time() - start_time:.2f} seconds")
-
-            ## TODO: you know what to do #settings #cleanthatmess
             if self.verbose:
                 print("Retrieve labels in jdist")
-            
             start_time = time.time()
             self.labels_in_jdist = self.get_labels_in_jdist_bins(self)
             print(f"Time elapsed for propagating all labels: {time.time() - start_time:.2f} seconds")
@@ -182,20 +174,6 @@ class JointDistribution():
             attr_filename = attr + '.npy'
             attr_file_path = os.path.join(self.jd_path, attr_filename)
             np.save(attr_file_path, value)
-
-    def get_labels_per_region(self):
-        start_time = time.time()
-        self.wpwp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(130, 185))
-        self.ep_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 50), slice(215, 280))
-        self.atl_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 45), slice(290, 350))
-        self.epcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(10, 30), slice(160, 260))
-        self.af_rf_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(340, 40))
-        self.io_wp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(20, 35), slice(55, 100),)
-        self.se_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 45), slice(100, 130))
-        self.ct_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(50, 60), slice(80, 120))
-        self.regions_labels_in_jdist = [self.wpwp_labels_in_jdist, self.ep_itcz_labels_in_jdist, self.atl_itcz_labels_in_jdist, self.epcz_labels_in_jdist, 
-                                    self.af_rf_labels_in_jdist, self.io_wp_labels_in_jdist, self.se_as_labels_in_jdist, self.ct_as_labels_in_jdist]
-        print(f"Time elapsed for loading regions labels: {time.time() - start_time:.2f} seconds")
 
     def load_from_npy(self):
         """
@@ -307,22 +285,22 @@ class JointDistribution():
     def compute_joint_density(self, sample1, sample2, method='default'):
         """Compute joint density. Method 'default' uses np.histogram2d, 'manual' uses np.ditigize and np.bincount."""
         
-        if sample1.shape == sample2.shape:
+        if self.sample1.shape == sample2.shape:
             
             if method == 'default':
 
                 # Compute bin count
-                self.bincount, _, _ = np.histogram2d(x=sample1.flatten(),y=sample2.flatten(),bins=(self.bins1,self.bins2),density=False)
+                self.bincount, _, _ = np.histogram2d(x=self.sample1.flatten(),y=self.sample2.flatten(),bins=(self.bins1,self.bins2),density=False)
 
                 # Compute probability density
-                self.density, _, _ = np.histogram2d(x=sample1.flatten(),y=sample2.flatten(),bins=(self.bins1,self.bins2),density=True)
+                self.density, _, _ = np.histogram2d(x=self.sample1.flatten(),y=self.sample2.flatten(),bins=(self.bins1,self.bins2),density=True)
 
             elif method == 'manual':
 
-                digit1 = np.digitize(sample1, self.bins1, right = True)
-                digit2 = np.digitize(sample2, self.bins2, right = True)
+                digit1 = np.digitize(self.sample1, self.bins1, right = True)
+                digit2 = np.digitize(self.sample2, self.bins2, right = True)
                 # if verbose : print(digit1, digit2)
-                Ntot = sample1.size
+                Ntot = self.sample1.size
             
                 l1, l2 = len(self.bins1)-1, len(self.bins2)-1 # BF: adjusted nbins to match np.histogram2d
 
@@ -344,21 +322,21 @@ class JointDistribution():
                     # density = bincount / Ntot / bin width
                     self.density[:, i2-1] = self.bincount[:, i2-1]/Ntot/dx_1/dx_2[i2-1]
     
-    def compute_normalized_density(self, sample1, sample2, verbose = False, method='default'):
+    def compute_normalized_density(self, verbose = False, method='default'):
         """Compute joint density normalized by the expected density of independent variables : N_ij * N_tot / N_i / N_j."""
 
         if self.bincount is None:
             
-            self.compute_joint_density(sample1, sample2, method = method)
+            self.compute_joint_density(self.sample1, self.sample2, method = method)
         
         l1, l2 = len(self.bins1)-1, len(self.bins2)-1 # BF: adjusted nbins to match np.histogram2d
 
-        digit1 = np.digitize(sample1, self.bins1, right = True)
-        digit2 = np.digitize(sample2, self.bins2, right = True)
+        digit1 = np.digitize(self.sample1, self.bins1, right = True)
+        digit2 = np.digitize(self.sample2, self.bins2, right = True)
 
         N1 = [np.sum(digit1==i1) for i1 in range(l1)]
         N2 = [np.sum(digit2==i2) for i2 in range(l2)]
-        Ntot = sample1.size
+        Ntot = self.sample1.size
         with np.errstate(divide='ignore'):
             Norm = Ntot / np.outer(N1, N2)
         Norm[np.isinf(Norm)] = 1
@@ -743,8 +721,8 @@ class JointDistribution():
         # -- Frame
         ax_show = ax.twinx().twiny()
         ax = set_frame_invlog(ax, self.dist1.ranks, self.dist2.ranks)
-        ax.set_xlabel(r"1$^\circ\times 1$day extremes")
-        ax.set_ylabel(r"4km-30mn extremes")
+        ax.set_xlabel(r"1$^\circ\times 1$day "+self.var_id_1)
+        ax.set_ylabel(r"4km-30mn "+self.var_id_2)
         # ax.set_title(title)
 
         # -- Density
@@ -779,26 +757,24 @@ class JointDistribution():
             ax_show.plot(x_branch_2,x_branch_2,'k--')
         
         return ax
-
-    def load_storms_tracking(self):
-        dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
-        file_storms = os.path.join(self.settings["DIR_DATA_OUT"], "storms.pkl")
-        if os.path.exists(file_storms):
-            print("loading storms from pkl")
-            with open(file_storms, 'rb') as file:
-                storms = pickle.load(file)
-        else : 
-            paths = glob.glob(os.path.join(self.settings['DIR_STORM_TRACKING'], '*.gz'))
-            storms = load_toocan(paths[0])+load_toocan(paths[1])
-            with open(file_storms, 'wb') as file:
-                pickle.dump(storms, file)
-        label_storms = [storms[i].label for i in range(len(storms))]
-        dict_i_storms_by_label = {}
-        for i, storm in enumerate(storms):
-                if storm.label not in dict_i_storms_by_label.keys():
-                    dict_i_storms_by_label[storm.label] = i
-        return storms, label_storms, dict_i_storms_by_label
     
+    def get_labels_per_region(self):
+        ### TODO, put this in settings when working on it again. Validate the regions otherwise
+        
+        start_time = time.time()
+        # make it loop ? 
+        self.wpwp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(130, 185))
+        self.ep_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 50), slice(215, 280))
+        self.atl_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 45), slice(290, 350))
+        self.epcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(10, 30), slice(160, 260))
+        self.af_rf_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(340, 40))
+        self.io_wp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(20, 35), slice(55, 100),)
+        self.se_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 45), slice(100, 130))
+        self.ct_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(50, 60), slice(80, 120))
+        self.regions_labels_in_jdist = [self.wpwp_labels_in_jdist, self.ep_itcz_labels_in_jdist, self.atl_itcz_labels_in_jdist, self.epcz_labels_in_jdist, 
+                                    self.af_rf_labels_in_jdist, self.io_wp_labels_in_jdist, self.se_as_labels_in_jdist, self.ct_as_labels_in_jdist]
+        print(f"Time elapsed for loading regions labels: {time.time() - start_time:.2f} seconds")
+       
     def get_labels_in_jdist_bins(self, jdist, regional = False, lat_slice=None, lon_slice=None):
         """
         Return matrix N_i,N_j,N_MCS of labels in each bin of the joint distribution

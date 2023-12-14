@@ -325,16 +325,17 @@ class CaseStudy():
         if "MCS_label" not in self.variables_names:
             self.variables_names.append("MCS_label")
 
-        if vanilla :
-            # I love SQL time
-            self.rel_table['Unnamed: 0.1'] = self.rel_table['Unnamed: 0.1'].astype(int)
-            self.rel_table['ditvi_date_key'] = pd.to_datetime(self.rel_table[['year', 'month', 'day']]).dt.strftime("%y-%m-%d")
-            # print(pd.to_datetime(self.rel_table[['year', 'month', 'day']]))
-            self.days_i_t_per_var_id["MCS_label"] = self.rel_table.groupby('ditvi_date_key')['Unnamed: 0.1'].apply(lambda group: (group+1).tolist()).to_dict()
+        # let's get rid off rel_table because of duplicates issue (not quantified)
+        # if vanilla :
+        #     # I love SQL time
+        #     self.rel_table['Unnamed: 0.1'] = self.rel_table['Unnamed: 0.1'].astype(int)
+        #     self.rel_table['ditvi_date_key'] = pd.to_datetime(self.rel_table[['year', 'month', 'day']]).dt.strftime("%y-%m-%d")
+        #     # print(pd.to_datetime(self.rel_table[['year', 'month', 'day']]))
+        #     self.days_i_t_per_var_id["MCS_label"] = self.rel_table.groupby('ditvi_date_key')['Unnamed: 0.1'].apply(lambda group: (group+1).tolist()).to_dict()
             
-            return self.variables_names, self.days_i_t_per_var_id
-        else :
+        #     return self.variables_names, self.days_i_t_per_var_id
+        # else :
             ## I have a feeling that joint distrib doesn't work well otherwise but to check
-            self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id["Prec"]
-
-            return self.variables_names, self.days_i_t_per_var_id
+        self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id["Prec"]
+        self.days_i_t_per_var_id["MCS_label_Tb_Feng"] = self.days_i_t_per_var_id["Prec"]
+        return self.variables_names, self.days_i_t_per_var_id

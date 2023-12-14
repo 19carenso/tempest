@@ -4,7 +4,7 @@ import sys
 import re
 import yaml 
 import numpy as np
-
+import datetime as dt
 import gc
 import xarray as xr
 import warnings 
@@ -20,22 +20,21 @@ class Handler():
         self.rel_table = self.load_rel_table(self.settings['REL_TABLE'])
 
     def load_seg(self, i_t):
-        
-        #path_dyamond = self.get_rootname_from_i_t(i_t)
         path_toocan = self.rel_table.loc[self.rel_table['Unnamed: 0.1'] == i_t-1, 'img_seg_path']
         if len(path_toocan)==1 : path_toocan = '/' + path_toocan.values[0]
         else : print('Rel_table has a problem')
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
             img_toocan = xr.open_dataarray(path_toocan, engine='netcdf4')
-
-        ## MJC : I don't understand why you need to do this.
-        # if self.settings['DIR_TOOCANSEG_DYAMOND'] is None: path_TOOCAN = full_path
-        # else:
-        #     filename = os.path.basename(full_path)
-        #     date = os.path.basename(os.path.dirname(full_path))
-        #     path_TOOCAN = os.path.join(self.settings['DIR_TOOCANSEG_DYAMOND'],date,filename)
-            
+        return img_toocan
+    
+    def load_seg_tb_feng(self, i_t):
+        path_toocan = self.get_filename_tb_feng(i_t)
+        if len(path_toocan)==1 : path_toocan = '/' + path_toocan.values[0]
+        else : print('Rel_table has a problem')
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=xr.SerializationWarning)
+            img_toocan = xr.open_dataarray(path_toocan, engine='netcdf4')
         return img_toocan
     
     def i_t_from_utc(self, utc):
@@ -67,6 +66,30 @@ class Handler():
         string_timestamp = str(int(int(i_t) * 240)).zfill(10)
         result = f"DYAMOND_9216x4608x74_7.5s_4km_4608_"+string_timestamp
         return result
+
+
+    def get_filename_tb_feng(self, i_t):
+        root = "/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/TOOCAN_Olr-Tb_Feng/TOOCAN_v2.07/GLOBAL/2016/"
+
+        dict_date_ref = self.settings["DATE_REF"]
+        datetime_ref = dt.datetime(dict_date_ref['year'], dict_date_ref['month'], dict_date_ref['day'])
+        timestamp_ref = datetime_ref.timestamp()
+
+        i_t_in_seconds = i_t * 30 * 60
+        timezone_weird_lag_to_watch = 2*60*60 #2hours
+        timestamp = timestamp_ref + i_t_in_seconds + timezone_weird_lag_to_watch
+        date = dt.datetime.utcfromtimestamp(timestamp)
+        
+        string_date = date.strftime("%Y_%m_%d")
+        hours = int(date.strftime("%H"))
+        minutes = int(date.strftime("%M"))
+        n_half_hours = int(2*hours + minutes/30 + 1)
+        dir_path = os.path.join(root, string_date)
+        string_date_no_underscore = string_date.replace('_', '')
+        file_root= "mcs_mask_TOOCAN_SAM_"+string_date_no_underscore+'-'+str(n_half_hours).zfill(3)+'.nc'
+        filename = os.path.join(dir_path, file_root)
+        return filename
+
 
     def load_rel_table(self, file_path):
         """

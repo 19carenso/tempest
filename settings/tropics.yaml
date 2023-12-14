@@ -60,6 +60,7 @@ new_var: ## These list and dict must be sorted by dependency
     [
       "Prec", 
       "MCS_label", 
+      "MCS_label_Tb_Feng",
       "QV_sat",
       "QV_sat_2d", 
       "W500"
@@ -68,6 +69,7 @@ new_var: ## These list and dict must be sorted by dependency
     {
       "Prec" : ["Precac", "Precac-1"], 
       "MCS_label" : [],
+      "MCS_label_Tb_Feng" : [],
       "QV_sat" : ["PP", "TABS"], 
       "QV_sat_2d" : ["T2mm", "PSFC"], 
       "W500" : ["W"]
@@ -76,6 +78,7 @@ new_var: ## These list and dict must be sorted by dependency
     {
       "Prec" : "load_prec",
       "MCS_label" : "load_seg",
+      "MCS_label_Tb_Feng" : "load_seg_tb_feng",
       "QV_sat" : "compute_qv_sat", 
       "QV_sat_2d" : "compute_qv_sat_2d", 
       "W500" : "extract_w500"

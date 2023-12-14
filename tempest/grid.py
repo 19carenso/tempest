@@ -16,9 +16,6 @@ from datetime import datetime as dt
 
 import matplotlib.pyplot as plt
 
-from .casestudy import CaseStudy
-
-
 class Grid(): 
     # except verbose i actually don't want any
     def __init__(self, casestudy, fast = True, overwrite = True, verbose_steps = False, verbose=False):
@@ -408,7 +405,7 @@ class Grid():
                     keys+= ["Alpha_99_99_native", "Sigma_99_99_native"]
         
         # Overide - If var_id is MCS (or maybe later contains MCS) - the funcs and keys to only compute the MCS_label
-        if var_id == "MCS_label" : 
+        if var_id == "MCS_label" or var_id == "MCS_label_Tb_Feng" : 
             key = var_id
             keys = [key]
             funcs_to_compute = [None]
@@ -462,7 +459,7 @@ class Grid():
         var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
 
         for var_regridded in  var_regridded_per_funcs:
-            if var_id == 'MCS_label':  
+            if var_id == 'MCS_label' or var_id == "MCS_label_Tb_Feng":  
                 n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
                 da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
                                         coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
@@ -556,7 +553,7 @@ class Grid():
 
             return results
         
-        if var_id == "MCS_label" :
+        if var_id == "MCS_label" or var_id == "MCS_label_Tb_Feng":
             ## MCS have a special treatment as they are the storm tracking inputs, they don't use regrid_single_time_step
             ## Any variable with MCS within should actually be treated differently.
             

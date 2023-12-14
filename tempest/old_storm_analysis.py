@@ -11,7 +11,7 @@ from scipy.optimize import OptimizeWarning
 
 # Suppress specific warning
 
-def piecewise_linear(t:np.array,t_breaks:list,s_max:float):
+def _piecewise_linear(t:np.array,t_breaks:list,s_max:float):
     """
     Define piecewise linear surface growth over timer with constant value at beginning and end.
 
@@ -43,7 +43,7 @@ def piecewise_linear(t:np.array,t_breaks:list,s_max:float):
                 
     return np.piecewise(t,cond_list,func_list)
 
-def piecewise_fit(t:np.array,s:np.array,t_breaks_0:list,s_max_0:float):    
+def _piecewise_fit(t:np.array,s:np.array,t_breaks_0:list,s_max_0:float):    
     """
     Compute piecewise-linear fit of surf(t).
 
@@ -63,7 +63,7 @@ def piecewise_fit(t:np.array,s:np.array,t_breaks_0:list,s_max_0:float):
     N_breaks = len(t_breaks_0)
 
     def piecewise_fun(t,*p):
-        return piecewise_linear(t,p[0:N_breaks],p[-1])
+        return _piecewise_linear(t,p[0:N_breaks],p[-1])
 
     # we add bounds so that time breaks stay ordered
     t_lower_bounds = [-np.inf] + t_breaks_0[:-1]
@@ -74,7 +74,7 @@ def piecewise_fit(t:np.array,s:np.array,t_breaks_0:list,s_max_0:float):
     
     p , e = curve_fit(piecewise_fun, t, s, p0=t_breaks_0+[s_max_0], bounds = (t_lower_bounds + s_lower_bounds, t_upper_bounds + s_upper_bounds))
 
-    s_id = piecewise_linear(t, p[0:N_breaks], p[-1])
+    s_id = _piecewise_linear(t, p[0:N_breaks], p[-1])
     s_max = p[-1]
     t_breaks = list(p[0:N_breaks])
     
@@ -103,7 +103,7 @@ def set_storm_growth_rate(storm, r_treshold = 0.85, verbose = False, plot = Fals
 
         try:
             # Your existing code that raises the warning
-            t_breaks, s_max, s_id = piecewise_fit(time, surf, time_breaks, s_max)
+            t_breaks, s_max, s_id = _piecewise_fit(time, surf, time_breaks, s_max)
             r_squared = r2_score(surf, s_id)
             growth_r_squared = r2_score(surf[:math.ceil(t_breaks[1])], s_id[:math.ceil(t_breaks[1])])
             decay_r_squared = r2_score(surf[math.floor(t_breaks[1]):], s_id[math.floor(t_breaks[1]):])
@@ -122,14 +122,3 @@ def set_storm_growth_rate(storm, r_treshold = 0.85, verbose = False, plot = Fals
         return r_squared, growth_r_squared, decay_r_squared, *t_breaks, s_max
 
 
-# if plot : 
-#     # Return ax object if plotting is necessary
-#     fig, ax = plt.subplots()
-#     ax.scatter(time, surf, label='Surface')
-#     time_plot = np.linspace(0, time.max(), 1000)
-#     #ax.plot(time_plot, piecewise_linear(time_plot, t_breaks, s_breaks), 'r-', label='Idealized Surface')
-#     ax.legend()
-#     ax.set_xlabel('Time')
-#     ax.set_ylabel('Surface Values')
-#     ax.set_title('Fitting a Triangle Function to Surface Values over Time')
-#     plt.show()

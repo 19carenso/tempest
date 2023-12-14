@@ -17,12 +17,12 @@ sys.path.append(workdir)
 # Instantiate CaseStudy by passing the settings. 
 # Should also create appropriate directories
 hdlr = handler.Handler(settings_path)
-cs = casestudy.CaseStudy(hdlr, overwrite = False ,verbose = True)
-gr = grid.Grid(cs, fast = True, overwrite = False, verbose_steps = True, verbose = True)
+cs = casestudy.CaseStudy(hdlr, overwrite = True ,verbose = True)
+gr = grid.Grid(cs, fast = True, overwrite = True, verbose_steps = True, verbose = True)
 
 if __name__ == '__main__':
 
-    gr.compute_funcs_for_var_id("Prec")
+    gr.compute_funcs_for_var_id("MCS_label_Tb_Feng")
 
     # jd = joint_distrib.JointDistribution(gr, nd= 5, overwrite = False, storm_tracking = True)
 
