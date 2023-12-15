@@ -36,7 +36,7 @@ class CaseStudy():
 
         self.data_out = os.path.join(self.settings['DIR_DATA_OUT'], self.name)
         # Storm tracking paths in a pandas df
-        self.rel_table = self.handler.load_rel_table(self.settings['REL_TABLE'])
+        # self.rel_table = self.handler.load_rel_table(self.settings['REL_TABLE'])
         # Variables
         self._set_region_coord_and_period()
         
@@ -59,7 +59,7 @@ class CaseStudy():
             self.var_names_3d = self._load_var_id_in_data_in(False)
             self.variables_names = self.var_names_2d + self.var_names_3d
             self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
-            self.days_i_t_per_var_id = self.skip_prec_i_t()
+            # self.days_i_t_per_var_id = self.skip_prec_i_t()
             self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
             print(f"Variables data retrieved. Saving them in {json_path}")
             self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, self.var_names_2d, self.var_names_3d, json_path)
@@ -268,7 +268,7 @@ class CaseStudy():
 
             if len(ddates)>0:
                 dates = reduce(lambda x, y: list(set(x) & set(y)), ddates)
-
+            dates = np.sort(dates)
             i_t_per_date = []
             for i_date, date in enumerate(dates):
                 dindexes = []
@@ -281,7 +281,7 @@ class CaseStudy():
                             for i in range(offset):
                                 #[-2] is to avoid the +int at the end of var_id
                                 prev_date_indexes.append(self.days_i_t_per_var_id[dvar_id[:-2]][prev_date][-(i+1)]+offset)
-                        this_date_indexes = [self.days_i_t_per_var_id[dvar_id[:-2]][date][i]+offset for i in range(1+len(self.days_i_t_per_var_id[dvar_id[:-2]][date])-offset)]
+                        this_date_indexes = [self.days_i_t_per_var_id[dvar_id[:-2]][date][i]+offset for i in range(len(self.days_i_t_per_var_id[dvar_id[:-2]][date])-offset)]
                         
                         if i_date !=0: 
                             dindexes.append(prev_date_indexes+this_date_indexes)
@@ -314,28 +314,6 @@ class CaseStudy():
 
         return new_var_names, dependencies, functions
         
-    def skip_prec_i_t(self): 
-        """
-            Skip the i_t specified in settings
-            Only for "Prec" but it could be generalized to any variables 
-        """
-        to_skip = self.settings["skip_prec_i_t"]
-        i_min, i_max = self.settings["TIME_RANGE"][0], self.settings["TIME_RANGE"][1] 
-        days = list(self.days_i_t_per_var_id['Prec'].keys())
-        
-        for day in days:
-            indexes = self.days_i_t_per_var_id["Prec"][day]
-            filtered_indexes = [idx for idx in indexes if (idx >= i_min) and (idx<=i_max)]
-            if len(filtered_indexes) == 0 : del self.days_i_t_per_var_id["Prec"][day]
-            else : 
-                for i_t in to_skip:
-                    if i_t in filtered_indexes:
-                        filtered_indexes.remove(i_t)
-                if len(filtered_indexes)==0 : del self.days_i_t_per_var_id["Prec"][day]
-                else : self.days_i_t_per_var_id["Prec"][day] = filtered_indexes             
-
-        return self.days_i_t_per_var_id
-
     def add_storm_tracking_variables(self, vanilla = False):
         """
         Could be a whole Class as there will  be a lot of future development
@@ -360,3 +338,27 @@ class CaseStudy():
         self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id["Prec"]
         self.days_i_t_per_var_id["MCS_label_Tb_Feng"] = self.days_i_t_per_var_id["Prec"]
         return self.variables_names, self.days_i_t_per_var_id
+
+
+
+# def skip_prec_i_t(self): 
+#     """
+#         Skip the i_t specified in settings
+#         Only for "Prec" but it could be generalized to any variables 
+#     """
+#     to_skip = self.settings["skip_prec_i_t"]
+#     i_min, i_max = self.settings["TIME_RANGE"][0], self.settings["TIME_RANGE"][1] 
+#     days = list(self.days_i_t_per_var_id['Prec'].keys())
+    
+#     for day in days:
+#         indexes = self.days_i_t_per_var_id["Prec"][day]
+#         filtered_indexes = [idx for idx in indexes if (idx >= i_min) and (idx<=i_max)]
+#         if len(filtered_indexes) == 0 : del self.days_i_t_per_var_id["Prec"][day]
+#         else : 
+#             for i_t in to_skip:
+#                 if i_t in filtered_indexes:
+#                     filtered_indexes.remove(i_t)
+#             if len(filtered_indexes)==0 : del self.days_i_t_per_var_id["Prec"][day]
+#             else : self.days_i_t_per_var_id["Prec"][day] = filtered_indexes             
+
+#     return self.days_i_t_per_var_id

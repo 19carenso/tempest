@@ -22,11 +22,13 @@ DIR_DATA_3D_IN: '/bdd/DYAMOND/SAM-4km/OUT_3D'
 # I don't like this one
 DIR_DATA2: '/homedata/mcarenso/DYAMOND_REGIONS/tropics/SAM/diagnostics_2D'
 
-# This is specific to first TOOCAN Run
-DIR_STORM_TRACKING: '/data/fiolleau/DYAMOND/TOOCAN/TOOCAN_v2.07/GLOBAL/2016/FileTracking'
+# Classic TOOCAN run
+DIR_STORM_TRACK: '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/TOOCAN/TOOCAN_v2.07/GLOBAL/2016/'
+DIR_STORM_TRACKING: '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/TOOCAN/TOOCAN_v2.07/GLOBAL/2016/FileTracking'
 REL_TABLE: "input/relation_2_table_UTC_dyamond_segmentation.csv"
 
-# Nouveau run TOOCAN Tb_Feng
+# TB_Feng TOOCAN RUN
+DIR_STORM_TRACK_TB_FENG: '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/TOOCAN_Olr-Tb_Feng/TOOCAN_v2.07/GLOBAL/2016/'
 DIR_STORM_TRACKING_TB_FENG: '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/TOOCAN_Olr-Tb_Feng/TOOCAN_v2.07/GLOBAL/2016/FileTracking/'
 
 
@@ -50,8 +52,9 @@ norm_specs:
 
 # Regions of Analysis
 BOX: [-30, 30, 0, 360] # [lat_min, lat_max, lon_min, lon_max]
-TIME_RANGE: [832, 1917] # [start, end] in timestep (so rows) of dir_data_in
 # Box corresponds to the inedx [[2304, 3840], [7936, 8704]] in DYAMOND_SAM data
+
+TIME_RANGE: [0, 1917] # [start, end] in timestep (so rows) of dir_data_in
 
 # could be catched dynamically
 DATE_REF: {year : 2016, month : 8, day : 1} # date of the first timestep of the data

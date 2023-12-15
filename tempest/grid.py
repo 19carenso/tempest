@@ -375,7 +375,8 @@ class Grid():
         keys_loaded = [key for key in list(var_ds.variables) if var_id in key] 
         
         if var_id == "Prec" :
-            funcs = self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
+            ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
+            funcs = self.func_names #+ ["heavy", "supra", "ultra", "wet", "convective"]
         else: 
             funcs = self.func_names
         
@@ -390,7 +391,7 @@ class Grid():
                 # Would required a to_complete bool tp then adapt the saving of computed days
                 continue
             else :
-                if overwrite_var_id : print("compute var_id again because of overwrite parameter")
+                if overwrite_var_id : print(f"compute {keys_loaded} again because of overwrite parameter")
                 funcs_to_compute.append(func_name) 
                 keys.append(key) 
                             

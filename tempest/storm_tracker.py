@@ -59,6 +59,12 @@ class StormTracker():
         else : 
             paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
             storms = load_toocan(paths[0])+load_toocan(paths[1])
+            # weird bug of latmin and lonmax being inverted ! 
+            for storm in storms :
+                save_latmin = storm.latmin
+                setattr(storm, "latmin", storm.lonmax)
+                setattr(storm, "lonmax", save_latmin)
+
             with open(file_storms, 'wb') as file:
                 pickle.dump(storms, file)
         label_storms = [storms[i].label for i in range(len(storms))]

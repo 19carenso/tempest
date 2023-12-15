@@ -20,13 +20,10 @@ class Handler():
         self.rel_table = self.load_rel_table(self.settings['REL_TABLE'])
 
     def load_seg(self, grid, i_t):
-        ## no need for  grid but allos dynamic catch in same behavior than for other variables
-        path_toocan = self.rel_table.loc[self.rel_table['Unnamed: 0.1'] == i_t-1, 'img_seg_path']
-        if len(path_toocan)==1 : path_toocan = '/' + path_toocan.values[0]
-        else : print('Rel_table has a problem')
+        path_toocan = self.get_filename_classic(i_t) ## There is the differences
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataarray(path_toocan, engine='netcdf4')
+            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask
         return img_toocan
 
     def load_seg_tb_feng(self, grid, i_t):
@@ -66,8 +63,8 @@ class Handler():
         result = f"DYAMOND_9216x4608x74_7.5s_4km_4608_"+string_timestamp
         return result
 
-    def get_filename_tb_feng(self, i_t):
-        root = "/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/TOOCAN_Olr-Tb_Feng/TOOCAN_v2.07/GLOBAL/2016/"
+    def get_filename_classic(self, i_t):
+        root = self.settings['DIR_STORM_TRACK']
 
         dict_date_ref = self.settings["DATE_REF"]
         datetime_ref = dt.datetime(dict_date_ref['year'], dict_date_ref['month'], dict_date_ref['day'])
@@ -88,6 +85,27 @@ class Handler():
         filename = os.path.join(dir_path, file_root)
         return filename
 
+    def get_filename_tb_feng(self, i_t):
+        root = self.settings['DIR_STORM_TRACK_TB_FENG']
+
+        dict_date_ref = self.settings["DATE_REF"]
+        datetime_ref = dt.datetime(dict_date_ref['year'], dict_date_ref['month'], dict_date_ref['day'])
+        timestamp_ref = datetime_ref.timestamp()
+
+        i_t_in_seconds = i_t * 30 * 60
+        timezone_weird_lag_to_watch = 2*60*60 #2hours
+        timestamp = timestamp_ref + i_t_in_seconds + timezone_weird_lag_to_watch
+        date = dt.datetime.utcfromtimestamp(timestamp)
+        
+        string_date = date.strftime("%Y_%m_%d")
+        hours = int(date.strftime("%H"))
+        minutes = int(date.strftime("%M"))
+        n_half_hours = int(2*hours + minutes/30 + 1)
+        dir_path = os.path.join(root, string_date)
+        string_date_no_underscore = string_date.replace('_', '')
+        file_root= "mcs_mask_TOOCAN_SAM_"+string_date_no_underscore+'-'+str(n_half_hours).zfill(3)+'.nc'
+        filename = os.path.join(dir_path, file_root)
+        return filename
 
     def load_rel_table(self, file_path):
         """

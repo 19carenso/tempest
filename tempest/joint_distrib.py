@@ -24,7 +24,7 @@ class JointDistribution():
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, storm_tracker = None, nd=4, var_id_1 = "mean_Prec", var_id_2 = "max_Prec", overwrite=False, verbose = False, regionalize = False):
+    def __init__(self, grid, storm_tracker = None, nd=4, var_id = "Prec", var_id_1 = "mean_Prec", var_id_2 = "max_Prec", overwrite=False, verbose = False, regionalize = False):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -43,10 +43,10 @@ class JointDistribution():
         self.nd = nd
 
         self.ditvi = grid.casestudy.days_i_t_per_var_id
+        self.var_id = var_id
+        self.prec = grid.get_var_id_ds(self.var_id)
         
-        self.prec = grid.get_var_id_ds("Prec")
-        
-        self.shape = np.shape(self.prec["mean_Prec"].to_numpy())
+        self.shape = np.shape(self.prec[self.var_id_1].to_numpy())
         
         self.sample1 = self.prec[var_id_1].to_numpy().ravel()
         self.sample2 = self.prec[var_id_2].to_numpy().ravel()
@@ -786,7 +786,6 @@ class JointDistribution():
         
         for i_bin in range(n_i):
             for j_bin in range(n_j):
-                
                 # print(i_bin,j_bin)
                 labels_bin = np.unique(self.labels_in_joint_bin(i_bin,j_bin, regional, lat_slice, lon_slice))
                 # number of labels
