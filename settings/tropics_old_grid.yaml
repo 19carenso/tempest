@@ -4,7 +4,7 @@
 
 # Basic Settings
 MODEL: 'DYAMOND_SAM'
-REGION: 'Tropics'
+REGION: 'Tropics_old_grid'
 
 # Inner paths 
 DIR_INPUT: 'input/' 

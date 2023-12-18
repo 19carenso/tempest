@@ -45,7 +45,7 @@ def _load_plot_var(var_id, gr, i_t):
 verbose = False
 
 # i_label = 20000
-label = 274297
+label = 124402
 i_label = jd.dict_i_storms_by_label[label]
 storm = jd.storms[i_label]
 
@@ -57,8 +57,7 @@ print("storm label", storm.label,  "from", i_0, "to" ,i_f)
 ### Make it square
 
 length = max(storm.latmin%90 - storm.latmax%90, storm.lonmax - storm.lonmin)
-bordersize = 2
-i_t = i_0 + 8
+bordersize = 0.5
 
 if np.isclose(storm.latmax - storm.latmin, length):
     latmax, latmin = storm.latmax + bordersize, storm.latmin - bordersize
@@ -93,7 +92,7 @@ for i_t in range(i_0, i_f):
     lon, lat = seg.longitude.values, seg.latitude.values
 
     # Define contour levels
-    contour_levels = np.arange(130, 165, 15) #225K to 236K
+    contour_levels = np.arange(130, 180, 5) #225K to ?K
 
     # Plot contours with specified levels
     contour_plot = ax.contour(lon, lat, olr, transform=ccrs.PlateCarree(), levels=contour_levels, colors='k', alpha=0.1)

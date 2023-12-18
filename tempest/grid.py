@@ -18,17 +18,20 @@ import matplotlib.pyplot as plt
 
 class Grid(): 
     # except verbose i actually don't want any
-    def __init__(self, casestudy, fast = True, overwrite = True, verbose_steps = False, verbose=False):
+    def __init__(self, casestudy, simpler_grid = True, fast = True, overwrite = True, verbose_steps = False, verbose=False):
         self.casestudy = casestudy
         self.settings = casestudy.settings
 
         ## Get the region borders
         self.n_lat = self.casestudy.lat_slice.stop - self.casestudy.lat_slice.start
         self.n_lon = self.casestudy.lon_slice.stop - self.casestudy.lon_slice.start
-        
+        # here latitude -30 is 
+        self.lat_global = np.linspace(-29.5, 29.5, 60) # override box settings, carefull of behaviour
+        self.lon_global = np.linspace(0.5, 359.5, 360)
         ## Bool for running a quicker computation (can multiply by x2 or x8 depending on the function)
         self.fast = fast
-        
+        self.simpler_grid = simpler_grid
+
         ## explicitly verbose
         self.verbose = verbose
 
@@ -42,7 +45,51 @@ class Grid():
         self.func_names = ['max', 'mean']
 
         self.settings = casestudy.settings
+
+    def _make_simple_grid(self):
+        print("Making simpler grid")
+        dir = self.settings['DIR_DATA_2D_IN']
+        for file in os.listdir(dir):
+            self.template_native_df = xr.open_dataset(os.path.join(dir,file)).sel(lon=self.casestudy.lon_slice,lat=self.casestudy.lat_slice)
+            break
         
+        if self.verbose_steps: print('compute coord centers...')
+        self.lat_centers = self.template_native_df['lat'].sel(lat=self.casestudy.lat_slice).values
+        self.lon_centers = self.template_native_df['lon'].sel(lon=self.casestudy.lon_slice).values
+        
+        if self.verbose_steps: print('compute pixel surface...')
+
+        self.lat_length_on_center, self.lon_length_on_center = self._compute_length_centers_from_coord_borders()
+
+        self.pixel_surface = self.lat_length_on_center * self.lon_length_on_center    
+
+        if self.verbose_steps: print('compute native to global index slices')
+
+        i_lat_native = []
+        lat_min_global, lat_max_global = self.settings["BOX"][0], self.settings["BOX"][1]
+        lat_global = list(range(lat_min_global, lat_max_global+1, 1)) #adapt the step 1 for finer or coarser in the futur
+        self.lat = self.template_native_df.lat
+        for lat_inf, lat_sup in zip(lat_global[:-1], lat_global[1:]):
+            i_lat_native_for_global = np.where((self.lat >=lat_inf) & (self.lat <= lat_sup))[0]
+            i_lat_native.append(i_lat_native_for_global)
+
+        self.slices_i_lat = [slice(lat_native[0], lat_native[-1]) for lat_native in i_lat_native]
+
+        i_lon_native = []
+        lon_min_global, lon_max_global = self.settings["BOX"][2], self.settings["BOX"][3]
+        lon_global = list(range(lon_min_global, lon_max_global+1, 1))
+        self.lon = self.template_native_df.lon
+        for lon_inf, lon_sup in zip(lon_global[:-1], lon_global[1:]):
+            i_lon_native_for_global = np.where((self.lon >= lon_inf) & (self.lon <= lon_sup))[0]
+            i_lon_native.append(i_lon_native_for_global)
+
+        self.single_slice_j_lon = [slice(lon_native[0], lon_native[-1]) for lon_native in i_lon_native]
+        self.slices_j_lon = [self.single_slice_j_lon for _ in self.slices_i_lat] #for more complex grid behaviour issues
+
+        if self.verbose_steps: print("compute global pixel surface with native sum func and grid pixels")
+        self.grid_surface = self.sum_data_from_center_to_global(self.pixel_surface)
+
+
     def make_output_ready(self, overwrite):
         filepath= os.path.join(self.casestudy.data_out, "grid_attributes.pkl")
         if not os.path.exists(filepath):
@@ -50,7 +97,11 @@ class Grid():
         else : self.overwrite = overwrite 
 
         if self.overwrite:
-            self._prepare_grid()    
+            if self.simpler_grid:
+                self._make_simple_grid()
+            else : 
+                self._prepare_grid() 
+
             self.save_grid_attr(filepath)
         else :
             self.load_grid_attr(filepath)
@@ -77,7 +128,7 @@ class Grid():
 
             # compute
             
-            if self.verbose_steps: print('-- Prepare data')
+            if self.verbose_steps: print('-- Prepare comple and wrong grid')
 
             if self.verbose_steps: print('compute coord centers...')
             self.lat_centers = self.template_native_df['lat'].sel(lat=self.casestudy.lat_slice).values
@@ -103,12 +154,12 @@ class Grid():
             if self.verbose_steps: print('compute i and alpha lat')
             self.i_min, self.i_max, self.alpha_i_min, self.alpha_i_max = self._get_i_and_alpha_lat()
 
-            if self.verbose_steps: print('compute area by lon')
             if not self.fast : 
                 self.slices_i_lat = [slice(i_min+1, i_max) for i_min, i_max in zip(self.i_min[:,0], self.i_max[:,0])] 
             elif self.fast :
-                self.slices_i_lat = [slice(i_min, i_max) for i_min, i_max in zip(self.i_min[:,0], self.i_max[:,0])]    
-                
+                self.slices_i_lat = [slice(i_min, i_max) for i_min, i_max in zip(self.i_min[:,0], self.i_max[:,0])]   
+                 
+            if self.verbose_steps: print('compute area by lon')
             self.area_by_lon_and_global_lat = self._compute_area_by_lon()
             self.cumsum_area_by_lon_and_global_lat = np.cumsum(self.area_by_lon_and_global_lat, axis = 1)
 
@@ -637,6 +688,7 @@ class Grid():
                 day_per_func = day_per_diag   
 
         return day_per_func
+
 ### Add-ons methods for special regridding, should be simplified to help users
 
     def spatial_mean_data_from_center_to_global(self, data_on_center):
@@ -752,3 +804,37 @@ class Grid():
         
         # expand so that we can concatenate futur dataarrays along day dim
         return output
+
+    def regrid_funcs_and_save_for_day(self, day, var_id='Prec', funcs=['max', 'mean']):
+        """
+        Compute multiple functions on new grid for a given day
+        """	
+
+        var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
+        var_ds = self.get_var_id_ds(var_id)
+        da_day_per_keys = []
+        for var_regridded in  var_regridded_per_funcs:
+            if var_id == 'MCS_label' or var_id == "MCS_label_Tb_Feng":  
+                n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
+                da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
+                                        coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
+            else :
+                if isinstance(var_regridded, list):
+                    da_day = xr.DataArray(var_regridded[0], dims=['lat_global', 'lon_global', 'days'], 
+                                            coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
+                else : 
+                    da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days'], 
+                                            coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
+                    
+            da_day_per_keys.append(da_day)
+
+        del var_regridded_per_funcs
+        gc.collect()
+        
+        for da_day, func in zip(da_day_per_keys, funcs):
+            key = '%s_%s'%(func,var_id)
+            var_ds[key].loc[{'days' : day}] = da_day
+        
+        file = self.get_var_ds_file(var_id)
+        var_ds.to_netcdf(file)
+        var_ds.close()

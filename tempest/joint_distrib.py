@@ -131,9 +131,9 @@ class JointDistribution():
         return str_out
 
     def get_distribs(self):
-        name_dist1 = self.name + '_' + self.var_id_1
+        name_dist1 = 'dist_' + self.var_id_1
         path_dist1 = os.path.join(self.dir_out, name_dist1)
-        name_dist2 = self.name + '_' + self.var_id_2
+        name_dist2 = 'dist_' + self.var_id_2
         path_dist2 = os.path.join(self.dir_out, name_dist2)
 
         if self.overwrite:

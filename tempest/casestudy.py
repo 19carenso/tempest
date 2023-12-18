@@ -59,7 +59,10 @@ class CaseStudy():
             self.var_names_3d = self._load_var_id_in_data_in(False)
             self.variables_names = self.var_names_2d + self.var_names_3d
             self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
-            # self.days_i_t_per_var_id = self.skip_prec_i_t()
+            # quite manual
+            self.days_i_t_per_var_id = self.skip_prec_i_t("Prec")
+            self.days_i_t_per_var_id = self.skip_prec_i_t("Prec_t_minus_1")
+
             self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
             print(f"Variables data retrieved. Saving them in {json_path}")
             self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, self.var_names_2d, self.var_names_3d, json_path)
@@ -339,26 +342,24 @@ class CaseStudy():
         self.days_i_t_per_var_id["MCS_label_Tb_Feng"] = self.days_i_t_per_var_id["Prec"]
         return self.variables_names, self.days_i_t_per_var_id
 
+    def skip_prec_i_t(self, var_id): 
+        """
+            Skip the i_t specified in settings
+            Only for "Prec" but it could be generalized to any variables 
+        """
+        to_skip = self.settings["skip_prec_i_t"]
+        i_min, i_max = self.settings["TIME_RANGE"][0], self.settings["TIME_RANGE"][1] 
+        days = list(self.days_i_t_per_var_id[var_id].keys())
+        
+        for day in days:
+            indexes = self.days_i_t_per_var_id[var_id][day]
+            filtered_indexes = [idx for idx in indexes if (idx >= i_min) and (idx<=i_max)]
+            if len(filtered_indexes) == 0 : del self.days_i_t_per_var_id[var_id][day]
+            else : 
+                for i_t in to_skip:
+                    if i_t in filtered_indexes:
+                        filtered_indexes.remove(i_t)
+                if len(filtered_indexes)==0 : del self.days_i_t_per_var_id[var_id][day]
+                else : self.days_i_t_per_var_id[var_id][day] = filtered_indexes             
 
-
-# def skip_prec_i_t(self): 
-#     """
-#         Skip the i_t specified in settings
-#         Only for "Prec" but it could be generalized to any variables 
-#     """
-#     to_skip = self.settings["skip_prec_i_t"]
-#     i_min, i_max = self.settings["TIME_RANGE"][0], self.settings["TIME_RANGE"][1] 
-#     days = list(self.days_i_t_per_var_id['Prec'].keys())
-    
-#     for day in days:
-#         indexes = self.days_i_t_per_var_id["Prec"][day]
-#         filtered_indexes = [idx for idx in indexes if (idx >= i_min) and (idx<=i_max)]
-#         if len(filtered_indexes) == 0 : del self.days_i_t_per_var_id["Prec"][day]
-#         else : 
-#             for i_t in to_skip:
-#                 if i_t in filtered_indexes:
-#                     filtered_indexes.remove(i_t)
-#             if len(filtered_indexes)==0 : del self.days_i_t_per_var_id["Prec"][day]
-#             else : self.days_i_t_per_var_id["Prec"][day] = filtered_indexes             
-
-#     return self.days_i_t_per_var_id
+        return self.days_i_t_per_var_id

@@ -188,8 +188,10 @@ class Handler():
         This is why I use very explicit variable names. 
         Oh and they must del their loadings as they'll be called a lot...
         """
-
-        previous_precac = self.load_var(grid, 'Precac', i_t -1)
+        if i_t in self.settings["prec_i_t_bug_precac"]:
+            previous_precac = self.load_var(grid, 'Precac', i_t-2)
+        else : 
+            previous_precac = self.load_var(grid, 'Precac', i_t-1)    
         current_precac = self.load_var(grid, 'Precac', i_t)
 
         prec= current_precac - previous_precac
