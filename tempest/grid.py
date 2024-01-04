@@ -89,7 +89,6 @@ class Grid():
         if self.verbose_steps: print("compute global pixel surface with native sum func and grid pixels")
         self.grid_surface = self.sum_data_from_center_to_global(self.pixel_surface)
 
-
     def make_output_ready(self, overwrite):
         filepath= os.path.join(self.casestudy.data_out, "grid_attributes.pkl")
         if not os.path.exists(filepath):
@@ -399,8 +398,8 @@ class Grid():
             dims_global = ['lat_global', 'lon_global', 'days']
             days = list(self.casestudy.days_i_t_per_var_id[var_id].keys())
             coords_global = {'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': days}
-            da_global = xr.DataArray(None, dims = dims_global, coords = coords_global)
-            ds = xr.Dataset({'global_pixel_surf': da_global})
+            da_global = xr.DataArray(None, dims = dims_global, coords = coords_global) # should add pixel surf here (extended by correct number of days)
+            ds = xr.Dataset({'global_pixel_surf': da_global}) 
             ds.to_netcdf(file)    
         else:
             # Open the existing NetCDF file using xarray
@@ -413,9 +412,39 @@ class Grid():
                 print(f"The dataset is missing the following coordinates: {missing_coordinates}")
         return ds
 
-## Kinda an issue that there is 3 funcs to basically do the same thing
-## One will be removed when we get rid off the .pkl
-
+    def get_landmask(self):
+        file = self.get_var_ds_file("LANDMASK")
+        if not os.path.exists(file):
+            print("Creating Earth (rough borders)")
+            #arbitratry choice here, corresponds to i_t = 960
+            filepath_var = os.path.join(self.settings["DIR_DATA_2D_IN"], "DYAMOND_9216x4608x74_7.5s_4km_4608_0000230640.LANDMASK.2D.nc")
+            landmask = xr.open_dataarray(filepath_var).load().sel(lon=self.casestudy.lon_slice,lat=self.casestudy.lat_slice)[0]
+            landmask_regridded = np.zeros((self.n_lat, self.n_lon))
+            for i, slice_i_lat in enumerate(self.slices_i_lat):
+                for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
+                    lm = landmask[slice_i_lat, slice_j_lon]
+                    lm_unique = np.unique(lm)
+                    if 1.0000314 in lm_unique :
+                        landmask_regridded[i,j] = 1
+                    else : 
+                        landmask_regridded[i,j] = 0
+                        
+            dims_global = ['lat_global', "lon_global"]
+            coords_global = {'lat_global' : self.lat_global, 'lon_global' : self.lon_global}
+            da_global = xr.DataArray(landmask_regridded, dims = dims_global, coords = coords_global)
+            ds = xr.Dataset({'Landmask' : da_global})
+            ds.to_netcdf(file)
+        else : 
+            ds = xr.open_dataset(file)
+            required_coordinates = ['lat_global', 'lon_global']
+            missing_coordinates = [coord for coord in required_coordinates if coord not in ds.coords]
+            if missing_coordinates:
+                # Il est corrompu on dirait... ROBIN ALED
+                print(f"The dataset is missing the following coordinates: {missing_coordinates}")
+                
+        return ds
+                
+# Thes are super unclear but I got used to it..
     def compute_funcs_for_var_id(self, var_id='Prec', overwrite_var_id = False):
         """
         Save to netcdf all the funcs to apply to var_id, that were not already a key. 
@@ -427,7 +456,7 @@ class Grid():
         
         if var_id == "Prec" :
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
-            funcs = self.func_names #+ ["heavy", "supra", "ultra", "wet", "convective"]
+            funcs = self.func_names +["cond_alpha_50"]#+ ["heavy", "supra", "ultra", "wet", "convective"]
         else: 
             funcs = self.func_names
         
@@ -456,6 +485,8 @@ class Grid():
                     keys+= ["Alpha_1mm_per_h", "Sigma_1mm_per_h"]
                 if "convective" == func_name:
                     keys+= ["Alpha_99_99_native", "Sigma_99_99_native"]
+                if "cond_alpha" in func_name:
+                    keys+=["mean_unweighted_"+var_id, "Sigma_"+key, "Treshold_"+key, "Sigma_intra_day_"+key]
         
         # Overide - If var_id is MCS (or maybe later contains MCS) - the funcs and keys to only compute the MCS_label
         if var_id == "MCS_label" or var_id == "MCS_label_Tb_Feng" : 
@@ -465,13 +496,13 @@ class Grid():
         
         if len(keys)>0 : 
             print(f"These keys : {keys} have to be computed.")
-            
             da_days_funcs = [[] for _ in funcs_to_compute]
-            if "heavy" in funcs_to_compute: da_days_funcs += [[], [], []] # mean_bis, alpha95, sigma95
-            if "supra" in funcs_to_compute: da_days_funcs += [[], []] # alpha99, sigma99
-            if "ultra" in funcs_to_compute: da_days_funcs += [[], []] #alpha99.99, sigma99.99
-            if "wet"   in funcs_to_compute: da_days_funcs += [[], []] #alpha1mm, sigma1mm
-            if "convective" in funcs_to_compute: da_days_funcs += [[], []]
+            for func in funcs_to_compute : 
+                if func is not None: #MCS overide issue
+                    if "cond_alpha" in func: 
+                        da_days_funcs += [[], [], [], []]
+                    elif "supra" == func or "ultra" == func or "wet" == func or "convective"==func or "heavy" == func:
+                        da_days_funcs += [[], []]
             
             days = list(self.casestudy.days_i_t_per_var_id[var_id].keys())
             for day in days:
@@ -484,8 +515,9 @@ class Grid():
                 gc.collect()
 
             for da_day, key in zip(da_days_funcs, keys) : 
+                if self.verbose : print("concat da days before saving")
             ## concat the list of dataarrays along days dimensions
-                da_var_regrid = xr.concat(da_day, dim = 'days')
+                da_var_regrid = xr.concat(da_day, dim = 'days').sortby('days')
                 ## By doing assign we actually keep the already existing variables of the netcdf
                 ## If we were adding specific days to already existing key, we should do it an other way.
                 ## Could use the to_complete bool mentionned earlier in the function
@@ -518,17 +550,22 @@ class Grid():
                                         coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
                 
             else :
-                if isinstance(var_regridded, list):
+                if isinstance(var_regridded, list): #why when what (random guess it's for 3d extracted variables, lets skip)
                     da_day = xr.DataArray(var_regridded[0], dims=['lat_global', 'lon_global', 'days'], 
                                             coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
                 else : 
-                    da_day = xr.DataArray(var_regridded   , dims=['lat_global', 'lon_global', 'days'], 
-                                            coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
+                    if len(np.shape(var_regridded))==3:
+                        if self.verbose : print("got a 3 shape da")
+                        da_day = xr.DataArray(var_regridded   , dims=['lat_global', 'lon_global', 'days'], 
+                                                coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day]})
+                    elif len(np.shape(var_regridded))==4:
+                        if self.verbose : print("got a 4 shape da")
+                        da_day = xr.DataArray(var_regridded, dims = ['lat_global', 'lon_global', 'time', 'days'],
+                                              coords={'lat_global' : self.lat_global, 'lon_global' : self.lon_global, 'time' : np.arange(48), 'days': [day]})
             outputs_da.append(da_day)
-            
         del var_regridded_per_funcs
+        del da_day
         gc.collect()
-        
         return outputs_da
 
     def regrid_funcs_for_day(self, day, var_id='Prec', funcs_to_compute=['max', 'mean']):
@@ -574,7 +611,17 @@ class Grid():
             temp_funcs_to_compute.remove('convective') 
         else:
              convective_bool = False
-
+        
+        treshold_alpha = np.nan
+        for temp_func in temp_funcs_to_compute:
+            if temp_func is not None: #same MCS overide problem
+                if "cond_alpha" in temp_func:
+                    treshold_alpha = float("0." + temp_func[-2:]) ## make it work as a list if you want for now, lets stay flex
+                    alpha_cond_bool = True
+                    temp_funcs_to_compute.remove(temp_func)
+                
+        if np.isnan(treshold_alpha) : alpha_cond_bool = False
+                
         def regrid_single_time_step(i_t, var_id, temp_funcs_to_compute):
             """
             Regrid data for a single time step.
@@ -623,8 +670,7 @@ class Grid():
 
             return [labels_regrid] # we put it into a list so that it is the same fashion than over variables that could have multiple funcs
 
-        elif len(temp_funcs_to_compute)>0 :
-                
+        elif len(temp_funcs_to_compute)>0 :     
             # Loop over i_t, then loop over funcs_to_compute as to call regrid_single_time_step only once per i_t
             all_i_t_for_day_per_func = [[] for _ in temp_funcs_to_compute]
             for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
@@ -632,7 +678,6 @@ class Grid():
                 results = regrid_single_time_step(i_t, var_id, temp_funcs_to_compute)
                 for i_f, result in enumerate(results):
                     all_i_t_for_day_per_func[i_f].append(result)
-
                 del results
                 gc.collect()
 
@@ -654,18 +699,21 @@ class Grid():
             del day_for_func
             gc.collect()
 
-        if heavy_bool or supra_bool or ultra_bool or wet_bool or convective_bool:
-            print("loading whole day data for day", day, "for heavy/supra/ultra/wet/convective")
+        if heavy_bool or supra_bool or ultra_bool or wet_bool or convective_bool or alpha_cond_bool:
+            print("loading whole day data for day", day, "for alpha_cond")
             # Prec can have this new special function that requires the whole day to be loaded as we're doing qunatile selection over the day 
             # so we need to make the distributions of these rains. 
             # Ain't really efficient should be done right after loading precips for other funcs but this happends in regrid_single_time_step so its boring..
             # In fact, rather than making the use of regrid single time step, mean and max should also be computed that way. 
             assert var_id == 'Prec'
             var_day =[]
-            for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
+            i_t_for_day = self.casestudy.days_i_t_per_var_id[var_id][day]
+            i_t_within_day = np.array(i_t_for_day)%48
+            for i_t in i_t_for_day:
                 var_day.append(self.casestudy.handler.load_var(self, var_id, i_t))
-            var_day = xr.concat(var_day, dim='time') 
+            var_day = xr.concat(var_day, dim='time') ## could add coord i_t here but im too dumb with dataArrays coords
             day_per_diag = []
+            
             if heavy_bool : 
                 print("compute heavy for day", day)
                 day_per_diag += self.get_tail_data_from_center_to_global(var_day, 95, True)
@@ -682,6 +730,10 @@ class Grid():
                 print("compute convective for day", day)
                 day_per_diag += self.get_tail_data_from_center_to_global(var_day, 32.19467629011342, False)    
 
+            if alpha_cond_bool:
+                print("compute alpha_cond for treshold ", treshold_alpha)
+                day_per_diag += self.get_cumsum_data_from_center_to_global(var_day, i_t_within_day, treshold_alpha)
+                
             if 'day_per_func' in locals() or 'day_per_func' in globals():
                 day_per_func += day_per_diag
             else : 
@@ -805,6 +857,59 @@ class Grid():
         # expand so that we can concatenate futur dataarrays along day dim
         return output
 
+    def get_cumsum_data_from_center_to_global(self, data_on_center, i_t_within_day, treshold = 0.5):
+        x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values #1st axis becomes time
+        mean_check = np.full((self.n_lat, self.n_lon), np.nan)
+        sigma_global = np.full((self.n_lat, self.n_lon), np.nan)
+        rate_cond = np.full((self.n_lat, self.n_lon), np.nan)
+        precip_cond = np.full((self.n_lat, self.n_lon), np.nan)
+        sigma_global_time = np.full((self.n_lat, self.n_lon, 48), np.nan) # at most 48 timestepwithin day 
+        
+        for i, slice_i_lat in enumerate(self.slices_i_lat):
+            # if i%10==0 : print(i, end='..')
+            for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
+                x_subset = np.sort(x[:, slice_i_lat, slice_j_lon].flatten()) 
+                x_subset_cumsum  = np.cumsum(x_subset) 
+                total_prec = x_subset_cumsum[-1]
+                
+                if total_prec == 0 : 
+                    mean = 0 
+                    sigma = 0
+                    rcond = 0
+                    pcond = 0
+                    sigma_time = np.zeros(shape = 48)
+                    
+                else : 
+                    x_clean = x_subset_cumsum/total_prec
+                    idx_rcond = np.where(x_clean > treshold)[0] # dynamically catch treshold from var_name.
+                    rcond = np.mean(x_subset[idx_rcond])
+                    sigma = len(x_subset[idx_rcond])/len(x_subset)
+                    pcond = x_subset[idx_rcond[0]] # the precip value at which precips start to be acounted in Rcond
+                    mean = np.mean(x_subset)
+                    sigma_time = []
+                    for t in range(np.shape(x[:, slice_i_lat, slice_j_lon])[0]):
+                        x_t_subset = x[t, slice_i_lat, slice_j_lon].flatten()
+                        sigma_t = sum(x_t_subset>pcond)/len(x_t_subset)
+                        sigma_time.append(sigma_t)
+                    sigma_time_array = np.array(sigma_time)
+                    
+                sigma_global_time[i,j, i_t_within_day] = sigma_time_array
+                mean_check[i,j] = mean
+                sigma_global[i,j] = sigma
+                rate_cond[i,j] = rcond
+                precip_cond[i,j] = pcond
+
+        output = [
+                np.expand_dims(rate_cond, axis =-1),
+                np.expand_dims(mean_check, axis =-1), 
+                np.expand_dims(sigma_global, axis =-1), 
+                np.expand_dims(precip_cond, axis = -1), 
+                np.expand_dims(sigma_global_time, axis=-1)
+                ]
+    
+        # expand so that we can concatenate futur dataarrays along day dim
+        return output
+      
     def regrid_funcs_and_save_for_day(self, day, var_id='Prec', funcs=['max', 'mean']):
         """
         Compute multiple functions on new grid for a given day

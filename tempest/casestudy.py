@@ -60,10 +60,10 @@ class CaseStudy():
             self.variables_names = self.var_names_2d + self.var_names_3d
             self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
             # quite manual
-            self.days_i_t_per_var_id = self.skip_prec_i_t("Prec")
-            self.days_i_t_per_var_id = self.skip_prec_i_t("Prec_t_minus_1")
-
             self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
+            for var_id in self.variables_names:
+                self.days_i_t_per_var_id = self.skip_prec_i_t(var_id)
+
             print(f"Variables data retrieved. Saving them in {json_path}")
             self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, self.var_names_2d, self.var_names_3d, json_path)
         else :
@@ -346,8 +346,12 @@ class CaseStudy():
         """
             Skip the i_t specified in settings
             Only for "Prec" but it could be generalized to any variables 
+            should be to Prec_t_minus_1
         """
-        to_skip = self.settings["skip_prec_i_t"]
+        if var_id == "Prec": 
+            to_skip = self.settings["skip_prec_i_t"]
+        else : to_skip = []
+        
         i_min, i_max = self.settings["TIME_RANGE"][0], self.settings["TIME_RANGE"][1] 
         days = list(self.days_i_t_per_var_id[var_id].keys())
         
@@ -361,5 +365,5 @@ class CaseStudy():
                         filtered_indexes.remove(i_t)
                 if len(filtered_indexes)==0 : del self.days_i_t_per_var_id[var_id][day]
                 else : self.days_i_t_per_var_id[var_id][day] = filtered_indexes             
-
+                
         return self.days_i_t_per_var_id

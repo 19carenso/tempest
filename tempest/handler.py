@@ -191,10 +191,13 @@ class Handler():
         if i_t in self.settings["prec_i_t_bug_precac"]:
             previous_precac = self.load_var(grid, 'Precac', i_t-2)
         else : 
-            previous_precac = self.load_var(grid, 'Precac', i_t-1)    
+            previous_precac = self.load_var(grid, 'Precac', i_t-1)   
+
         current_precac = self.load_var(grid, 'Precac', i_t)
 
         prec= current_precac - previous_precac
+        prec = xr.where(prec < 0, 0, prec)
+        
         del previous_precac
         del current_precac
         gc.collect()
@@ -238,20 +241,3 @@ class Handler():
         del temp
         gc.collect()
         return qv_sat
-
-# bug
-    # def load_t_2_lag_2days(self, grid, i_t):
-    #     t_2m_lag_2days = self.load(var, grid, 'T2mm', i_t-48)
-    #     return t_2m_lag_2days
-# Traceback (most recent call last):
-#   File "/home/mcarenso/code/tempest/scripts/main.py", line 20, in <module>
-#     cs = casestudy.CaseStudy(hdlr, overwrite = True ,verbose = True)
-#   File "/home/mcarenso/code/tempest/tempest/casestudy.py", line 49, in __init__
-#     self.variables_names, self.days_i_t_per_var_id, self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self._set_variables(self.overwrite)    
-#   File "/home/mcarenso/code/tempest/tempest/casestudy.py", line 61, in _set_variables
-#     self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
-#   File "/home/mcarenso/code/tempest/tempest/casestudy.py", line 294, in add_new_var_id
-#     self.days_i_t_per_var_id = _update_ditvi(var_id, dependency)
-#   File "/home/mcarenso/code/tempest/tempest/casestudy.py", line 254, in _update_ditvi
-#     dates = reduce(lambda x, y: list(set(x) & set(y)), ddates)
-# TypeError: reduce() of empty sequence with no initial value

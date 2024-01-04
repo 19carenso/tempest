@@ -11,7 +11,7 @@ from tempest import grid
 from tempest import storm_tracker
 from tempest import joint_distrib
 from tempest import handler
-settings_path = 'settings/intro.yaml'
+settings_path = 'settings/tropics_20d.yaml'
 
 hdlr = handler.Handler(settings_path)
 cs = casestudy.CaseStudy(hdlr, overwrite = False ,verbose = False)

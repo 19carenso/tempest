@@ -10,6 +10,7 @@ import time
 from skimage import measure # pylance: disable=import-error 
 from scipy.optimize import curve_fit
 import warnings
+from math import ceil 
 
 from .distribution import Distribution
 # from .load_toocan import load_toocan
@@ -18,6 +19,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import cartopy.crs as ccrs
 from .plots.plot2d import set_frame_invlog, show_joint_histogram
+from .plots.hist import simple_hist
 
 class JointDistribution():
     """
@@ -50,6 +52,9 @@ class JointDistribution():
         
         self.sample1 = self.prec[var_id_1].to_numpy().ravel()
         self.sample2 = self.prec[var_id_2].to_numpy().ravel()
+        ## quick work around, TODO : make it in grid, or investigate, not the most interesting anyway but made problem with np.digitize and some looping over bins
+        self.sample1[self.sample1 <= 0] = 1e-5 # bevause edge =right in np.digitize use 
+        self.sample2[self.sample2 <= 0] = 1e-5
 
         self.overwrite = overwrite
 
@@ -100,7 +105,7 @@ class JointDistribution():
             if self.verbose:
                 print("Retrieve labels in jdist")
             start_time = time.time()
-            self.labels_in_jdist = self.get_labels_in_jdist_bins(self)
+            self.labels_in_jdist = self.get_labels_in_jdist_bins()
             print(f"Time elapsed for propagating all labels: {time.time() - start_time:.2f} seconds")
             if self.regionalize : self.get_labels_per_region()
 
@@ -262,9 +267,6 @@ class JointDistribution():
                     
                 if verbose: print()
 
-        if verbose:
-            print()
-
         # If reach this point, everything should have worked smoothly, so:
         self.bin_locations_stored = True
 
@@ -348,22 +350,22 @@ class JointDistribution():
         digit1 = np.digitize(self.sample1, self.bins1, right = True)
         digit2 = np.digitize(self.sample2, self.bins2, right = True)
         
-        digit1_3D = np.reshape(digit1,self.shape)
-        digit2_3D = np.reshape(digit2,self.shape)
+        digit1_3d = np.reshape(digit1,self.shape)
+        digit2_3d = np.reshape(digit2,self.shape)
         
-        return digit1_3D,digit2_3D
+        return digit1_3d, digit2_3d
         
-    def compute_conditional_data_over_density(self, sample1, sample2, data = None):
+    def compute_conditional_data_over_density(self, data = None):
         """
-        TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
+        TODO Could be adapted to use joint_digit BF formalism but seems to work well as is, be careful
         """                                
-        digit1 = np.digitize(sample1.flatten(), self.bins1, right = True)
-        digit2 = np.digitize(sample2.flatten(), self.bins2, right = True)
+        digit1 = np.digitize(self.sample1.flatten(), self.bins1, right = True)
+        digit2 = np.digitize(self.sample2.flatten(), self.bins2, right = True)
         
         l1, l2 = len(self.bins1)-1, len(self.bins2)-1 # BF: adjusted nbins to match np.histogram2d
 
-        if data is not None : data_over_density = np.zeros(shape=(l1,l2))
-
+        if data is not None : 
+            data_over_density = np.zeros(shape=(l1,l2))
         for i2 in range(l2): 
             if data is not None: ## TEST AND DEBUG THIS
                 for i1 in range(l1):
@@ -371,7 +373,6 @@ class JointDistribution():
                     if len(data_idx)>0 :
                         data_over_density[i1, i2] = np.nanmean(data.flatten()[data_idx])
                     else : data_over_density[i1, i2] = 0
-
         if data is not None:
             
             return data_over_density
@@ -507,7 +508,7 @@ class JointDistribution():
             ax_show.plot(x_branch_2,x_branch_2,'k--')
             
     def get_mask_yxt(self, d1, d2, regional = False, lat_slice = None, lon_slice = None):
-        dj = self.joint_digit(d1, d2)
+        dj = self.joint_digit(d1+1, d2+1) # because np.digitize returns 1 for the i_bin 0
         dj_3d = self.joint_digit(self.digit_3d_1, self.digit_3d_2)
         mask = dj_3d == dj
         if regional:
@@ -670,10 +671,11 @@ class JointDistribution():
             
         return mask_all_labels
     
-    def get_mcs_bin_fraction(self):
+    def get_mcs_bin_fraction(self, bin_noise_treshold = 4):
         n_i, n_j = self.bincount.shape
         bin_fraction_mcs = np.full((n_i,n_j),np.nan)
         bin_noise = np.full((n_i,n_j),np.nan)
+        bin_counts = np.full((n_i,n_j),np.nan)
 
         for i_bin in range(n_i):
             for j_bin in range(n_j):
@@ -682,7 +684,7 @@ class JointDistribution():
                 mask_bin_yxt = self.get_mask_yxt(i_bin,j_bin)
             
                 # where bin falls in x-y-t and MCS occurs
-                mask_bin_with_mcs_yxt = np.logical_and(mask_bin_yxt,self.mask_labels_regridded_yxt)
+                mask_bin_with_mcs_yxt = np.logical_and(mask_bin_yxt, self.mask_labels_regridded_yxt)
                 
                 # number of points in joint mask
                 count_bin_mcs = np.sum(mask_bin_with_mcs_yxt)
@@ -690,8 +692,9 @@ class JointDistribution():
                 # number of point in bin mask
                 count_bin = np.sum(mask_bin_yxt)
                 
+                bin_counts[i_bin,j_bin] = count_bin
                 # store this fraction
-                if count_bin >= 4:
+                if count_bin >= bin_noise_treshold:
                     bin_fraction_mcs[i_bin,j_bin] = count_bin_mcs/count_bin
                 elif count_bin > 0:
                     bin_noise[i_bin,j_bin] = 1
@@ -702,7 +705,7 @@ class JointDistribution():
                 #         bin_noise[i_bin,j_bin] = 1
         
         # return this fraction
-        return bin_fraction_mcs, bin_noise
+        return bin_fraction_mcs, bin_noise, bin_counts
 
     def plot_data(self, data, data_noise = None, scale = 'linear', cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None)):
         self.make_mask()
@@ -763,24 +766,24 @@ class JointDistribution():
         
         start_time = time.time()
         # make it loop ? 
-        self.wpwp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(130, 185))
-        self.ep_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 50), slice(215, 280))
-        self.atl_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(35, 45), slice(290, 350))
-        self.epcz_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(10, 30), slice(160, 260))
-        self.af_rf_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 50), slice(340, 40))
-        self.io_wp_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(20, 35), slice(55, 100),)
-        self.se_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(30, 45), slice(100, 130))
-        self.ct_as_labels_in_jdist = self.get_labels_in_jdist_bins(self, True, slice(50, 60), slice(80, 120))
+        self.wpwp_labels_in_jdist = self.get_labels_in_jdist_bins(True, slice(30, 50), slice(130, 185))
+        self.ep_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(True, slice(35, 50), slice(215, 280))
+        self.atl_itcz_labels_in_jdist = self.get_labels_in_jdist_bins(True, slice(35, 45), slice(290, 350))
+        self.epcz_labels_in_jdist = self.get_labels_in_jdist_bins(True, slice(10, 30), slice(160, 260))
+        self.af_rf_labels_in_jdist = self.get_labels_in_jdist_bins(True, slice(30, 50), slice(340, 40))
+        self.io_wp_labels_in_jdist = self.get_labels_in_jdist_bins(True, slice(20, 35), slice(55, 100),)
+        self.se_as_labels_in_jdist = self.get_labels_in_jdist_bins(True, slice(30, 45), slice(100, 130))
+        self.ct_as_labels_in_jdist = self.get_labels_in_jdist_bins(True, slice(50, 60), slice(80, 120))
         self.regions_labels_in_jdist = [self.wpwp_labels_in_jdist, self.ep_itcz_labels_in_jdist, self.atl_itcz_labels_in_jdist, self.epcz_labels_in_jdist, 
                                     self.af_rf_labels_in_jdist, self.io_wp_labels_in_jdist, self.se_as_labels_in_jdist, self.ct_as_labels_in_jdist]
         print(f"Time elapsed for loading regions labels: {time.time() - start_time:.2f} seconds")
        
-    def get_labels_in_jdist_bins(self, jdist, regional = False, lat_slice=None, lon_slice=None):
+    def get_labels_in_jdist_bins(self, regional = False, lat_slice=None, lon_slice=None):
         """
         Return matrix N_i,N_j,N_MCS of labels in each bin of the joint distribution
         """
         
-        n_i,n_j = jdist.bincount.shape
+        n_i,n_j = self.bincount.shape
         n_mcs = self.labels_regridded_yxtm.shape[3]
         labels_ij = np.full((n_i,n_j, n_mcs),np.nan)
         
@@ -797,12 +800,13 @@ class JointDistribution():
         return labels_ij
     
     def storm_attributes_on_jdist(self, attr, func, region_labels_in_jdist = None):
+
         n_i, n_j = self.bincount.shape
         out_ij = np.full((n_i, n_j), np.nan)
 
-        for i_bin in range(1, n_i):
+        for i_bin in range(n_i):
             if i_bin%1==0 : print(i_bin, end='')
-            for j_bin in range(1, n_j):
+            for j_bin in range(n_j):
                 if region_labels_in_jdist is None : 
                     labels = self.labels_in_jdist[i_bin,j_bin]
                 else : 
@@ -827,3 +831,40 @@ class JointDistribution():
                         print("Oops!  That was no valid number.  Try again...")
 
         return out_ij
+    
+    def process_plot_var_cond(self, var_id, var_cond_list, mask = None, func = "mean"):
+        ## TODO catch var_unit somehow for cleaner labels
+        key = func+'_'+var_id
+        var_ds = self.grid.get_var_id_ds(var_id)
+        var = var_ds[key].sortby("days").values.ravel()
+        
+        ## have to make it smarter and add days_to_fill np.nan arrays before var... or reshape ! 
+        to_fill_var = len(self.sample1) - len(var)
+        var_padded_flat = np.pad(var, (to_fill_var, 0), mode = 'constant', constant_values = np.nan)
+        var_padded = np.reshape(var_padded_flat, self.shape)
+        bincount_where_var_cond = []
+        labels = []
+        for cond_inf, cond_sup in zip(var_cond_list[:-1], var_cond_list[1:]):
+            spatial_var_where_cond = list(np.where((var_padded>cond_inf) & (var_padded<=cond_sup)))
+            # print([(spatial_var_where_cond[i].dtype) for i in range(3)])
+            sample1_where_cond = self.prec[self.var_id_1].values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]]
+            sample2_where_cond = self.prec[self.var_id_2].values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]]
+            bincount_cond, _, _ = np.histogram2d(x=sample1_where_cond, y=sample2_where_cond, bins = (self.bins1, self.bins2), density = False)
+            bincount_where_var_cond.append(bincount_cond)
+            labels.append(f"{cond_inf} < {key} <= {cond_sup}")
+        
+        nrows = ceil(len(var_cond_list)/2)#+1 if impair
+        fig, axs = plt.subplots(nrows = nrows, ncols = 2, figsize = (12, 4.71*nrows))
+        
+        ax_hist = axs[0, 0]
+        simple_hist(var, f"{key}", bars= var_cond_list, fig = fig, ax = ax_hist) #label = f"Simple hist of {var_id}"
+        
+        ax_jd = axs[0, 1]
+        self.plot_data(self.norm_density, scale = 'log', label = "Vanilla Y", cmap=plt.cm.BrBG , fig =fig, ax = ax_jd, vbds = (1e-3,1e3))
+        
+        for bincount, ax, label in zip(bincount_where_var_cond, axs.flatten()[2:], labels):
+            self.plot_data(bincount/self.bincount, scale = 'linear',  cmap=plt.cm.magma_r, vbds = (0, 1), fig = fig, ax = ax, label = label)
+
+        var_ds.close()
+        plt.show()
+        return bincount_where_var_cond    

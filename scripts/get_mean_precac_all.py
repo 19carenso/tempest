@@ -23,16 +23,16 @@ gr = grid.Grid(cs, fast = True, overwrite = True, verbose_steps = True, verbose 
 
 if __name__ == '__main__':
     daily_mean_prec = []
-    for date in list(cs.days_i_t_per_var_id["Prec"].keys()):
+    for date in list(cs.days_i_t_per_var_id["Precac"].keys()):
         print("\n", date)
-        for i_t in list(cs.days_i_t_per_var_id["Prec"][date]):
+        for i_t in list(cs.days_i_t_per_var_id["Precac"][date]):
             print(i_t, end ='.')
-            data = hdlr.load_var(gr, "Prec", i_t)
+            data = hdlr.load_var(gr, "Precac", i_t)
             daily_mean_prec.append(np.mean(data.values))
             del data
             gc.collect()
     dir_out= "/home/mcarenso/code/tempest/output"
-    file = 'mean_post_modif_prec_tropics.npy'
+    file = 'mean_precac_tropics.npy'
     # Save the array as a NumPy file
     np.save(os.path.join(dir_out, file), np.array(daily_mean_prec))
     print(f"Mean precipitation saved to {os.path.join(dir_out, file)}")
