@@ -42,7 +42,9 @@ class Grid():
         
         # Funcs to compute on variable 
         # Actually this should be done in CaseStudy and passed there, so that it'd be eazy to control which func for any var_id
-        self.func_names = ['max', 'mean']
+        #### !!!!!!!!!!!!!!!!!!!!!!
+        self.func_names = ['mean'] ## !!!!! usually ['max', 'mean'] especially for Prec !!!!! 
+        #### !!!!!!!!!!!!!!!!!!!!!!
 
         self.settings = casestudy.settings
 

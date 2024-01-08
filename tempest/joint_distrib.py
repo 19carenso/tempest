@@ -868,3 +868,44 @@ class JointDistribution():
         var_ds.close()
         plt.show()
         return bincount_where_var_cond    
+
+    def process_plot_var_cond_reducing_prec(self, var_id, var_cond_list, mask = True, func = "mean"):
+        ## TODO catch var_unit somehow for cleaner labels
+        key = func+'_'+var_id
+        
+        # Trying to avoid the prec bug, maybe it's due to prec dataset already being open within jd
+        if var_id == "Prec" : 
+            ds_var = self.prec.sortby("days")[key]
+        else :  
+            ds_var = self.grid.get_var_id_ds(var_id).sortby("days")[key]
+            
+        var_days = list(ds_var.days.values)
+        ds_var = ds_var.sel(days = var_days).where(mask) # redundant ? 
+        var = ds_var.values.ravel()
+        
+        reduced_prec = self.prec.sel(days = var_days).where(mask)
+        bincount_where_var_cond = []
+        labels = []
+        for cond_inf, cond_sup in zip(var_cond_list[:-1], var_cond_list[1:]):
+            spatial_var_where_cond = list(np.where((ds_var.values>cond_inf) & (ds_var.values<=cond_sup)))
+            # print([(spatial_var_where_cond[i]) for i in range(3)])
+            sample1_where_cond = reduced_prec[self.var_id_1].values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
+            sample2_where_cond = reduced_prec[self.var_id_2].values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
+            bincount_cond, _, _ = np.histogram2d(x=sample1_where_cond, y=sample2_where_cond, bins = (self.bins1, self.bins2), density = False)
+            bincount_where_var_cond.append(bincount_cond)
+            labels.append(f"{cond_inf} < {key} <= {cond_sup}")
+        
+        nrows = ceil(len(var_cond_list)/2)#+1 if impair
+        fig, axs = plt.subplots(nrows = nrows, ncols = 2, figsize = (12, 4.71*nrows))
+        
+        ax_hist = axs[0, 0]
+        simple_hist(var, f"{key}", bars= var_cond_list, fig = fig, ax = ax_hist) #label = f"Simple hist of {var_id}"
+        
+        ax_jd = axs[0, 1]
+        bincount_reduced_prec, _, _ = np.histogram2d(x = reduced_prec[self.var_id_1].values.flatten(), y = reduced_prec[self.var_id_2].values.flatten(), bins = (self.bins1, self.bins2), density = False)
+        self.plot_data(bincount_reduced_prec, scale = 'log', label = "Reduced Prec", cmap=plt.cm.magma_r , fig =fig, ax = ax_jd)
+        
+        for bincount, ax, label in zip(bincount_where_var_cond, axs.flatten()[2:], labels):
+            self.plot_data(bincount/bincount_reduced_prec, scale = 'linear',  cmap=plt.cm.magma_r, vbds = (0, 1), fig = fig, ax = ax, label = label)
+        
+        return bincount_where_var_cond, bincount_reduced_prec
