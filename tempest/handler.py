@@ -8,6 +8,8 @@ import datetime as dt
 import gc
 import xarray as xr
 import warnings 
+import time
+import subprocess
 
 from .thermo import saturation_specific_humidity
 
@@ -16,7 +18,6 @@ class Handler():
         self.settings_path = settings_path
         with open(self.settings_path, 'r') as file:
             self.settings = yaml.safe_load(file)
-
         self.rel_table = self.load_rel_table(self.settings['REL_TABLE'])
 
     def load_seg(self, grid, i_t):
@@ -145,7 +146,7 @@ class Handler():
         else:
             return None
 
-    def load_var(self, grid, var_id, i_t): 
+    def load_var(self, grid, var_id, i_t, z = None): 
         """
         Load a variable at specified i_t.
         If the variable is a new one, calls the appropriate function, that will recursively call load_var
@@ -172,11 +173,24 @@ class Handler():
                 filepath_var = os.path.join(path_data_in, filename_var)
                 var = xr.open_dataarray(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)[0]
             elif var_id in var_3d :
+                assert z is not None
                 path_data_in = grid.settings["DIR_DATA_3D_IN"]
-                chunks = {'z': 74} # Always 74 vertical level in these data
+                # chunks = {'z': 74} # Always 74 vertical level in these data
                 filename_var = root+f"_{var_id}.nc"
                 filepath_var = os.path.join(path_data_in, filename_var)
-                var = xr.open_dataset(filepath_var, chunks = chunks).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0)
+                temp = os.path.join(self.settings["DIR_TEMPDATA"], grid.casestudy.name)
+                temp_var = os.path.join(temp, var_id)
+                if not os.path.exists(temp_var):
+                    os.makedirs(temp_var)
+                temp_file = os.path.join(temp_var, f"z_ind_{z}.nc")
+                # values from np.argwhere((np.array(file_lat)>=-30) & (np.array(file_lat)<=30)) with file lat being original file lat values
+                str_lat_slice = f"{1527},{3080}"
+                # values from np.argwhere((np.array(file_lat)>=0) & (np.array(file_lat)<=360)) with file lon being original lon values
+                str_lon_slice = f"{0},{9215}"
+                ncks_command = f"ncks -O -d lon,{str_lon_slice} -d lat,{str_lat_slice} -d time,{0} -d z,{z} {filepath_var} {temp_file}"
+                subprocess.run(ncks_command, shell=True)
+                # old # var = xr.open_dataset(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0, z=z) #, chunks = chunks)
+                var = xr.open_dataset(temp_file)
             return var
         
     def load_prec(self, grid, i_t):
@@ -195,7 +209,7 @@ class Handler():
 
         current_precac = self.load_var(grid, 'Precac', i_t)
 
-        prec= current_precac - previous_precac
+        prec = current_precac - previous_precac
         prec = xr.where(prec < 0, 0, prec)
         
         del previous_precac
@@ -224,12 +238,12 @@ class Handler():
         return qv_sat
 
     def extract_w500(self, grid, i_t):
-        w = self.load_var(grid, "W", i_t)
-        ind_500 = int(np.abs(w.p.load() - 500).argmin())
-        w_500 = w.isel(z=ind_500).W.compute()
-        
-        del w
-        gc.collect()
+        w_500 = self.load_var(grid, "W", i_t, z = 32).W # z=32 for 514mb closest to 500        
+        return w_500[0,0]
+    
+    def extract_w500_pos(self, grid, i_t):
+        w_500 = self.load_var(grid, "W", i_t, z = 32).W[0,0] # z=32 for 514mb closest to 500   
+        w_500 = xr.where(w_500 <0, 0, w_500)   
         return w_500
     
     def compute_qv_sat_2d(self, grid, i_t):
@@ -241,3 +255,12 @@ class Handler():
         del temp
         gc.collect()
         return qv_sat
+
+    def extract_w850(self, grid, i_t):
+        w_850 = self.load_var(grid, "W", i_t, z = 19).W       
+        return w_850[0,0]
+    
+    def extract_w850_pos(self, grid, i_t):
+        w_850 = self.load_var(grid, "W", i_t, z = 19).W[0,0]  
+        w_850 = xr.where(w_850 <0, 0, w_850)   
+        return w_850

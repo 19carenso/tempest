@@ -1,0 +1,8 @@
+    def extract_w850(self, grid, i_t):
+        w_850 = self.load_var(grid, "W", i_t, z = 19).W       
+        return w_850[0,0]
+    
+    def extract_w850_pos(self, grid, i_t):
+        w_850 = self.load_var(grid, "W", i_t, z = 19).W[0,0]  
+        w_850[w_850<0]=0     
+        return w_850

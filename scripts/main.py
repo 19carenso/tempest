@@ -17,15 +17,15 @@ sys.path.append(workdir)
 # Instantiate CaseStudy by passing the settings. 
 # Should also create appropriate directories
 hdlr = handler.Handler(settings_path) 
-cs = casestudy.CaseStudy(hdlr, overwrite = False ,verbose = True)
-gr = grid.Grid(cs, fast = True, overwrite = False, verbose_steps = True, verbose = True) 
+cs = casestudy.CaseStudy(hdlr, overwrite = True ,verbose = True)
+gr = grid.Grid(cs, fast = True, overwrite = True, verbose_steps = True, verbose = True) 
 
 if __name__ == '__main__':
     # gr.regrid_funcs_and_save_for_day("16-08-11", "Prec") carefull it corrupts the file 
     # gr.compute_funcs_for_var_id("PW", overwrite_var_id=True)
     # gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
   
-    gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("W850", overwrite_var_id=True)
     # gr.compute_funcs_for_var_id("MCS_label_Tb_Feng", overwrite_var_id=True)
 
     # jd = joint_distrib.JointDistribution(gr, nd= 5, overwrite = False, storm_tracking = True)

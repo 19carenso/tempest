@@ -68,7 +68,10 @@ new_var: ## These list and dict must be sorted by dependency
       "MCS_label_Tb_Feng",
       "QV_sat",
       "QV_sat_2d", 
-      "W500"
+      "W500", 
+      "W500_pos", 
+      "W850", 
+      "W850_pos"
     ]
   dependencies:
     {
@@ -78,7 +81,10 @@ new_var: ## These list and dict must be sorted by dependency
       "MCS_label_Tb_Feng" : [],
       "QV_sat" : ["PP", "TABS"], 
       "QV_sat_2d" : ["T2mm", "PSFC"], 
-      "W500" : ["W"]
+      "W500" : ["W"], 
+      "W500_pos" : ["W"], 
+      "W850" : ["W"], 
+      "W850_pos" : ["W"]
     }
   functions:
     {
@@ -88,7 +94,10 @@ new_var: ## These list and dict must be sorted by dependency
       "MCS_label_Tb_Feng" : "load_seg_tb_feng",
       "QV_sat" : "compute_qv_sat", 
       "QV_sat_2d" : "compute_qv_sat_2d", 
-      "W500" : "extract_w500"
+      "W500" : "extract_w500",
+      "W500_pos" : "extract_w500_pos",
+      "W850" : "extract_w850",
+      "W850_pos" : "extract_w850_pos",
     }
 
 # there should be a function to assert that. 
