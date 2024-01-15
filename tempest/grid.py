@@ -26,8 +26,8 @@ class Grid():
         self.n_lat = self.casestudy.lat_slice.stop - self.casestudy.lat_slice.start
         self.n_lon = self.casestudy.lon_slice.stop - self.casestudy.lon_slice.start
         # here latitude -30 is 
-        self.lat_global = np.linspace(-29.5, 29.5, 60) # override box settings, carefull of behaviour
-        self.lon_global = np.linspace(0.5, 359.5, 360)
+        self.lat_global = np.linspace(-29.5, 29.5, self.n_lat) # override box settings, carefull of behaviour
+        self.lon_global = np.linspace(0.5, 359.5, self.n_lon)
         ## Bool for running a quicker computation (can multiply by x2 or x8 depending on the function)
         self.fast = fast
         self.simpler_grid = simpler_grid
@@ -343,7 +343,7 @@ class Grid():
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
                 if self.verbose : pass #print(slice_i_lat, slice_j_lon)
                 if self.fast : 
-                    X[i,j] = np.sum(x[slice_i_lat, slice_j_lon])
+                    X[i,j] = np.nansum(x[slice_i_lat, slice_j_lon]) # passed from sum to nansum 01/15/2024
                 else : 
                     mid_sum = np.sum(x[slice_i_lat, slice_j_lon])
                     bottom_sum = np.sum( x[self.i_min[i,j], slice_j_lon]*self.alpha_i_min[i,j])
@@ -405,7 +405,11 @@ class Grid():
             ds.to_netcdf(file)    
         else:
             # Open the existing NetCDF file using xarray
-            ds = xr.open_dataset(file)
+            if "ds" in locals() or "ds" in globals():
+                pass
+            else : 
+                print("ds not found so forcing opening with xarray...")
+                ds = xr.open_dataset(file, engine = "netcdf4")
             # Check if the loaded dataset contains the required coordinates
             required_coordinates = ['lat_global', 'lon_global', 'days']
             missing_coordinates = [coord for coord in required_coordinates if coord not in ds.coords]
@@ -945,3 +949,17 @@ class Grid():
         file = self.get_var_ds_file(var_id)
         var_ds.to_netcdf(file)
         var_ds.close()
+        
+    def get_cond_prec_on_native_for_i_t(self, i_t):
+        file = self.get_var_ds_file("Prec")
+        with xr.open_dataset(file) as prec:
+            treshold_prec = prec.Treshold_cond_alpha_50_Prec.values
+            native_lon = self.slices_j_lon[-1][-1].stop+1
+            native_lat = self.slices_i_lat[-1].stop+1
+            out = np.zeros((native_lat, native_lon), float)
+            i_day = self.casestudy.get_i_day_from_i_t(i_t)
+            for i, slice_i_lat in enumerate(self.slices_i_lat):
+                for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
+                    value_to_expand = treshold_prec[i,j, i_day]
+                    out[slice_i_lat, slice_j_lon] = value_to_expand
+        return out

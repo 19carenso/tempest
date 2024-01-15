@@ -61,8 +61,12 @@ class CaseStudy():
             self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
             # quite manual
             self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
-            for var_id in self.variables_names:
-                self.days_i_t_per_var_id = self.skip_prec_i_t(var_id)
+            
+            # try to pass that within method add_new_var_id with a check for Prec as var_id or in dependency
+            # doesn't handle dependency of Prec_t_minus_1 just Prec
+            
+            # for var_id in self.variables_names:
+            #     self.days_i_t_per_var_id = self.skip_prec_i_t(var_id)
 
             print(f"Variables data retrieved. Saving them in {json_path}")
             self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, self.var_names_2d, self.var_names_3d, json_path)
@@ -247,16 +251,22 @@ class CaseStudy():
             dependency is a list of either directly original or new var_id, but it can also contain a +n or -n as to specify an offset in its indexes 
             e.g. :  Prec = Precac - Precac-1 ; dependencies["Prec"] = ["Precac", "Precac-1"]
 
-            ### TODO : kaje it work for Prec_t_minus_1 that depends on ["Precac-2", "Precac-1"] cuz for now dates doesn't work and the rest seems blurry
+            ### TODO : make it work for Prec_t_minus_1 that depends on ["Precac-2", "Precac-1"] cuz for now dates doesn't work and the rest seems blurry
             """
+            
+            ### 
+            # This block manages the dates of the variable
+            # It builds dates
+            ###
+            
             ddates = []
             for dvar_id in dependency:
                 ## Maybe if finally the date is empty of any i_t should be removed from the keys! even if it should not propagate any issue      
                 if "+" in dvar_id or "-" in dvar_id:
-                    ddates.append(list(self.days_i_t_per_var_id[dvar_id[:-2]].keys()))
+                    ddates.append(list(self.days_i_t_per_var_id[dvar_id[:-2]].keys())) #[:-2] is to remove the +1 or -2 at the end of the var
                     if "-" in dvar_id:
                         # this just has to add end dates if data is actually available further
-                        offset = self.handler.extract_digit_after_sign(dvar_id)
+                        offset = self.handler.extract_digit_after_sign(dvar_id) #should be a casestudy function, isn't use anywhere else...
                         last_date = list(self.days_i_t_per_var_id[dvar_id[:-2]].keys())[-1]
                         last_i_t_last_date = self.days_i_t_per_var_id[dvar_id[:-2]][last_date][-1]
 
@@ -272,6 +282,12 @@ class CaseStudy():
             if len(ddates)>0:
                 dates = reduce(lambda x, y: list(set(x) & set(y)), ddates)
             dates = np.sort(dates)
+            
+            ### 
+            # This block manages the indexes within the dates of the variable
+            # It builds i_t_per_date
+            ###
+            
             i_t_per_date = []
             for i_date, date in enumerate(dates):
                 dindexes = []
@@ -282,7 +298,7 @@ class CaseStudy():
                             prev_date = dates[i_date-1]
                             prev_date_indexes = []
                             for i in range(offset):
-                                #[-2] is to avoid the +int at the end of var_id
+                                #[:-2] is to avoid the +int at the end of var_id
                                 prev_date_indexes.append(self.days_i_t_per_var_id[dvar_id[:-2]][prev_date][-(i+1)]+offset)
                         this_date_indexes = [self.days_i_t_per_var_id[dvar_id[:-2]][date][i]+offset for i in range(len(self.days_i_t_per_var_id[dvar_id[:-2]][date])-offset)]
                         
@@ -293,6 +309,10 @@ class CaseStudy():
                     else : 
                         dindexes.append(list(self.days_i_t_per_var_id[dvar_id][date]))
                 i_t_per_date.append(reduce(lambda x, y: list(set(x) & set(y)), dindexes))
+
+            ### 
+            # This block update ditvi based on dates and i_t_per_date
+            ###
 
             self.days_i_t_per_var_id[var_id] = {}
             for i,date in enumerate(dates): 
@@ -310,10 +330,15 @@ class CaseStudy():
 
                 if var_id not in self.variables_names: self.variables_names.append(var_id)
                 print(var_id)
-
+         
                 if len(dependency) > 0 : # If you add new variables that have no dependency you must create your own function to load them 
                                          # and update ditvi like with add_storm_tracking_variables
                     self.days_i_t_per_var_id = _update_ditvi(var_id, dependency)
+                    if var_id == "Prec":
+                        self.skip_prec_i_t(var_id)
+                    ## maybe not necessary... ? 
+                    # if "Prec" in dependency:
+                    #     self.skip_prec_i_t(var_id)
 
         return new_var_names, dependencies, functions
         
@@ -345,13 +370,12 @@ class CaseStudy():
     def skip_prec_i_t(self, var_id): 
         """
             Skip the i_t specified in settings
-            Only for "Prec" but it could be generalized to any variables 
+            Only for "Prec" but it could be generalized to any variables that depends on Prec...
+            Or to be called before dependency is passed to new variables hm...
             should be to Prec_t_minus_1
         """
-        if var_id == "Prec": 
-            to_skip = self.settings["skip_prec_i_t"]
-        else : to_skip = []
-        
+        to_skip = self.settings["skip_prec_i_t"]
+
         i_min, i_max = self.settings["TIME_RANGE"][0], self.settings["TIME_RANGE"][1] 
         days = list(self.days_i_t_per_var_id[var_id].keys())
         
@@ -367,3 +391,12 @@ class CaseStudy():
                 else : self.days_i_t_per_var_id[var_id][day] = filtered_indexes             
                 
         return self.days_i_t_per_var_id
+      
+    def get_i_day_from_i_t(self, i_t):
+        """
+        Explicit name, instead could build a reversed dict of ditvi.
+        Uses Prec as it is now used to expand Treshold of cond_Prec to a native shape map
+        """
+        for i_day, day in enumerate(self.days_i_t_per_var_id["Prec"].keys()):
+            if i_t in self.days_i_t_per_var_id["Prec"][day] : 
+                return i_day

@@ -264,3 +264,23 @@ class Handler():
         w_850 = self.load_var(grid, "W", i_t, z = 19).W[0,0]  
         w_850 = xr.where(w_850 <0, 0, w_850)   
         return w_850
+    
+    def fetch_om850_over_cond_prec(self, grid, i_t):
+        om850 = self.load_var(grid, "OM850", i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t)
+        prec = self.load_var(grid, "Prec", i_t)
+        om850 = xr.where(prec > cond_prec, om850, np.nan)
+        del prec
+        del cond_prec
+        gc.collect()
+        return om850
+    
+    def fetch_om850_over_cond_prec_lag_1(self, grid, i_t):
+        om850 = self.load_var(grid, "OM850", i_t-1) #eazy
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t)
+        prec = self.load_var(grid, "Prec", i_t)
+        om850 = xr.where(prec > cond_prec, om850, np.nan)
+        del prec
+        del cond_prec
+        gc.collect()
+        return om850
