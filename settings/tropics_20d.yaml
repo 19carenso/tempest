@@ -73,7 +73,8 @@ new_var: ## These list and dict must be sorted by dependency
       "W850", 
       "W850_pos",
       "OM850_cond_Prec",
-      "OM850_cond_Prec_lag_1"
+      "OM850_cond_Prec_lag_1",
+      "neg_OM850_cond_Prec_lag_1"
     ]
   dependencies:
     {
@@ -88,7 +89,9 @@ new_var: ## These list and dict must be sorted by dependency
       "W850" : ["W"], 
       "W850_pos" : ["W"],
       "OM850_cond_Prec" : ["OM850", "Prec"],
-      "OM850_cond_Prec_lag_1" : ["OM850-1", "Prec"] 
+      "OM850_cond_Prec_lag_1" : ["OM850-1", "Prec"],
+      "neg_OM850_cond_Prec_lag_1" : ["OM850-1", "Prec"] 
+
 
     }
   functions:
@@ -104,7 +107,8 @@ new_var: ## These list and dict must be sorted by dependency
       "W850" : "extract_w850",
       "W850_pos" : "extract_w850_pos",
       "OM850_cond_Prec" : "fetch_om850_over_cond_prec",
-      "OM850_cond_Prec_lag_1" : "fetch_om850_over_cond_prec_lag_1"
+      "OM850_cond_Prec_lag_1" : "fetch_om850_over_cond_prec_lag_1",
+      "neg_OM850_cond_Prec_lag_1" : "fetch_neg_om850_over_cond_prec_lag_1"
     }
 
 # there should be a function to assert that. 

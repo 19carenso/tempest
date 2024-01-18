@@ -24,7 +24,7 @@ class Handler():
         path_toocan = self.get_filename_classic(i_t) ## There is the differences
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask
+            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(-30, 30))# because otherwise goes to -40, 40
         return img_toocan
 
     def load_seg_tb_feng(self, grid, i_t):
@@ -280,6 +280,17 @@ class Handler():
         cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t)
         prec = self.load_var(grid, "Prec", i_t)
         om850 = xr.where(prec > cond_prec, om850, np.nan)
+        del prec
+        del cond_prec
+        gc.collect()
+        return om850
+    
+    def fetch_neg_om850_over_cond_prec_lag_1(self, grid, i_t):
+        om850 = self.load_var(grid, "OM850", i_t-1) #eazy
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t)
+        prec = self.load_var(grid, "Prec", i_t)
+        om850 = xr.where(prec > cond_prec, om850, np.nan)
+        om850 = xr.where(om850 < 0, om850, np.nan)
         del prec
         del cond_prec
         gc.collect()

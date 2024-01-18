@@ -404,12 +404,7 @@ class Grid():
             ds = xr.Dataset({'global_pixel_surf': da_global}) 
             ds.to_netcdf(file)    
         else:
-            # Open the existing NetCDF file using xarray
-            if "ds" in locals() or "ds" in globals():
-                pass
-            else : 
-                print("ds not found so forcing opening with xarray...")
-                ds = xr.open_dataset(file, engine = "netcdf4")
+            ds = xr.open_dataset(file, engine = "netcdf4")
             # Check if the loaded dataset contains the required coordinates
             required_coordinates = ['lat_global', 'lon_global', 'days']
             missing_coordinates = [coord for coord in required_coordinates if coord not in ds.coords]

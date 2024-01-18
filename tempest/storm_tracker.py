@@ -21,7 +21,7 @@ class StormTracker():
     To instantiate Toocan's object only once per jd.
     """
     
-    def __init__(self, grid, label_var_id = "MCS_label", overwrite=False, verbose=False):
+    def __init__(self, grid, label_var_id = "MCS_label", overwrite_storms = True, overwrite=False, verbose=False):
         
         self.grid = grid
         self.settings = grid.settings
@@ -39,7 +39,7 @@ class StormTracker():
 
         # get storm tracking data
         print("Loading storms...")
-        self.storms, self.label_storms, self.dict_i_storms_by_label = self.load_storms_tracking()
+        self.storms, self.label_storms, self.dict_i_storms_by_label = self.load_storms_tracking(overwrite_storms)
         print(f"Time elapsed for loading storms: {time.time() - start_time:.2f} seconds")
     
         if self.overwrite :
@@ -48,15 +48,16 @@ class StormTracker():
             
             self.save_storms()
     
-    def load_storms_tracking(self):
+    def load_storms_tracking(self, overwrite):
         ## Make it a netcdf so that we don't struggle with loading it anymore
         dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
         file_storms = os.path.join(dir_out, "storms"+self.label_var_id+".pkl")
-        if os.path.exists(file_storms):
+        if os.path.exists(file_storms) and not overwrite:
             print("loading storms from pkl")
             with open(file_storms, 'rb') as file:
                 storms = pickle.load(file)
         else : 
+            if overwrite : print("Loading storms again because overwrite_storms is True")
             paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
             storms = load_toocan(paths[0])+load_toocan(paths[1])
             # weird bug of latmin and lonmax being inverted ! 
