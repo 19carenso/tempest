@@ -6,6 +6,8 @@ import glob
 import pickle
 import time
 import math 
+import xarray as xr 
+import pandas as pd
 
 import warnings
 from .load_toocan import load_toocan
@@ -20,8 +22,7 @@ class StormTracker():
     """
     To instantiate Toocan's object only once per jd.
     """
-    
-    def __init__(self, grid, label_var_id = "MCS_label", overwrite_storms = True, overwrite=False, verbose=False):
+    def __init__(self, grid, label_var_id = "MCS_label", overwrite_storms = False, overwrite=False, verbose=False):
         
         self.grid = grid
         self.settings = grid.settings
@@ -29,21 +30,24 @@ class StormTracker():
         self.overwrite = overwrite 
         self.verbose = verbose
         self.label_var_id = label_var_id
+
         if self.label_var_id == 'MCS_label':
             self.dir_storm = self.settings['DIR_STORM_TRACKING']
-        elif self.label_var_id == 'MCS_label_Tb_Feng'    :
+        elif self.label_var_id == 'MCS_label_Tb_Feng':
             self.dir_storm = self.settings['DIR_STORM_TRACKING_TB_FENG']
                 # Should check if regridded MCS labels are already stored in grid
+            
         self.labels_regridded_yxtm = grid.get_var_id_ds(self.label_var_id)[self.label_var_id].values
         self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm), axis=3)
 
         # get storm tracking data
         print("Loading storms...")
-        self.storms, self.label_storms, self.dict_i_storms_by_label = self.load_storms_tracking(overwrite_storms)
+        self.ds_storms = self.load_storms_tracking(overwrite_storms) #, self.label_storms, self.dict_i_storms_by_label
         print(f"Time elapsed for loading storms: {time.time() - start_time:.2f} seconds")
     
-        if self.overwrite :
-            for storm in self.storms:
+        ## adapt it to work with ds_storms
+        if self.overwrite and False:
+            for storm in self.ds_storms:
                 self.set_storm_growth_rate(storm, r_treshold=0.85)
             
             self.save_storms()
@@ -51,11 +55,11 @@ class StormTracker():
     def load_storms_tracking(self, overwrite):
         ## Make it a netcdf so that we don't struggle with loading it anymore
         dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
-        file_storms = os.path.join(dir_out, "storms"+self.label_var_id+".pkl")
+        file_storms = os.path.join(dir_out, "storms_"+self.label_var_id+".nc")
         if os.path.exists(file_storms) and not overwrite:
-            print("loading storms from pkl")
+            print("loading storms from netcdf")
             with open(file_storms, 'rb') as file:
-                storms = pickle.load(file)
+                ds_storms = xr.open_dataset(file)
         else : 
             if overwrite : print("Loading storms again because overwrite_storms is True")
             paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
@@ -65,23 +69,29 @@ class StormTracker():
                 save_latmin = storm.latmin
                 setattr(storm, "latmin", storm.lonmax)
                 setattr(storm, "lonmax", save_latmin)
+                #I'm trying to save data and time, this corresponds to the selected timerange
+                if storm.Utime_End/1800 < 960:
+                    storms.remove(storm)
+            
+            print("making ds storms ...")
+            ds_storms = self.make_ds(storms)
+            ds_storms.to_netcdf(file_storms)
+            print("ds storms saved ! ")
 
-            with open(file_storms, 'wb') as file:
-                pickle.dump(storms, file)
-        label_storms = [storms[i].label for i in range(len(storms))]
-        dict_i_storms_by_label = {}
-        for i, storm in enumerate(storms):
-                if storm.label not in dict_i_storms_by_label.keys():
-                    dict_i_storms_by_label[storm.label] = i
-        return storms, label_storms, dict_i_storms_by_label
+        # label_storms = [ds_storms['label'].isel(i) for i in range(len(ds_storms['label']))]
+        # dict_i_storms_by_label = {}
+        # for i, label in enumerate(ds_storms['label']):
+        #     if label not in dict_i_storms_by_label.keys():
+        #         dict_i_storms_by_label[label] = i
+
+        return ds_storms #, label_storms, dict_i_storms_by_label
 
     def save_storms(self):
         dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
-        file_storms = os.path.join(dir_out, "storms.pkl")
-        paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
-        storms = load_toocan(paths[0])+load_toocan(paths[1])
+        file_storms = os.path.join(dir_out, "ds_storms.nc")
         with open(file_storms, 'wb') as file:
-            pickle.dump(storms, file)
+            pickle.dump(self.storms, file)
+            print("storms saved in pkl")
             
     def _piecewise_linear(self, t:np.array,t_breaks:list,s_max:float):
         """
@@ -200,7 +210,70 @@ class StormTracker():
             if verbose : print(f"For storm with label {storm.label}, the growth rate computed by fitting a triangle is {growth_rate} with an r-score of {r_squared}")
         
             return r_squared, growth_r_squared, decay_r_squared, *t_breaks, s_max
+    
+    def make_ds(self, storms):
+        # Retrieve attribute names dynamically from the first object
+        attribute_names = [attr for attr in dir(storms[0]) if not callable(getattr(storms[0], attr)) and  not attr.startswith("clusters") and not attr.startswith("__")]
+        print("Label wise attributes ", attribute_names)
+        dict_storm = {attr: [getattr(obj, attr) for obj in storms if not attr.startswith("__")] for attr in attribute_names}
+
+        ## get clusters per storm so per label
+        clusters = [storm.clusters for storm in storms]
+
+        #first one for attr names
+        mcs_lfc = clusters[0]
+        clusters_attribute_names = [attr for attr in dir(mcs_lfc)if not callable(getattr(mcs_lfc, attr)) and not attr.startswith("__")]
+        print("Label's Lifecycle wise attributes ", clusters_attribute_names)
+
+        ## Build ds for storms attributes
+        data_vars = {}
+        labels = dict_storm["label"]
+        for key in dict_storm.keys():
+            da = xr.DataArray(dict_storm[key], dims = ['label'], coords = {'label' : labels})
+            data_vars[key] = da
+            
+        # ds_storms = xr.Dataset(data_vars)
+
+        ## Build ds for clusters attributes (list)
+        storm_clusters = {key : [] for key in clusters_attribute_names}
+        for i_storm, mcs_lfc in enumerate(clusters):
+            for attr in clusters_attribute_names:
+                var = getattr(mcs_lfc, attr)
+                if len(var)>0:
+                    storm_clusters[attr].append(var)
+
+        Utime_min, Utime_max = 0,0
+        for storm in storms : 
+            Utime_min = min(Utime_min, storm.Utime_Init)
+            Utime_max = max(Utime_max, storm.Utime_End)  
+            
+        Utime = np.arange(Utime_min, Utime_max + 1800, 1800)  
+        time = np.arange(960, 1920, 1) #should be similar
+
+        n_label = len(storm_clusters["Utime"])
+        n_time = 960 # all utime values possible within timerange
+
+        for key in storm_clusters.keys():
+            print(key)
+            # one cluster attributes is empty
+            if len(storm_clusters[key])>0 : 
+                data = np.full((n_label, n_time), np.nan)
+                for list, index_Utime in zip(storm_clusters[key], storm_clusters["Utime"]):
+                    for i, utime in enumerate(index_Utime): # peut-être relaxé pour utilise Utime_Init/1800 : Utime_End/1800
+                        idx_utime = int(utime/1800)-960 # Utime 
+                        data[idx_utime] = list[i]
+                da = xr.DataArray(data, dims = ['label', 'time'], coords = {'label' : dict_storm['label'], 'time' : time})
+                
+                # handle same name 
+                if key =="olrmin":
+                    data_vars["lifecycle_olrmin"] = da
+                else : 
+                    data_vars[key] = da
+                    
+        ds = xr.Dataset(data_vars)
         
+        return ds
+    
 # if plot : 
 #     # Return ax object if plotting is necessary
 #     fig, ax = plt.subplots()

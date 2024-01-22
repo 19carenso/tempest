@@ -26,7 +26,7 @@ if __name__ == '__main__':
     # gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
   
     # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
-    gr.compute_funcs_for_var_id("MCS_label_Tb_Feng", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("T2mm", overwrite_var_id=True)
 
     # jd = joint_distrib.JointDistribution(gr, nd= 5, overwrite = False, storm_tracking = True)
     

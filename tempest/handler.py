@@ -31,7 +31,7 @@ class Handler():
         path_toocan = self.get_filename_tb_feng(i_t) ## There is the differences
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask
+            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(-30, 30))
         return img_toocan
 
     def i_t_from_utc(self, utc):

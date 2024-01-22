@@ -358,30 +358,30 @@ class JointDistribution():
         
         return digit1_3d, digit2_3d
         
-    def compute_conditional_data_over_density(self, data = None, mask = None):
-        """
-        TODO Could be adapted to use joint_digit BF formalism but seems to work well as is, be careful
-        """         
-        var_days = list(data.days.values)  
-        reduced_prec = self.prec.sel(days = var_days)                     
-        digit1 = np.digitize(reduced_prec[self.var_id1], self.bins1, right = True)
-        digit2 = np.digitize(reduced_prec[self.var_id2], self.bins2, right = True)
+    # def compute_conditional_data_over_density(self, data = None, mask = None):
+    #     """
+    #     TODO Could be adapted to use joint_digit BF formalism but seems to work well as is, be careful
+    #     """         
+    #     var_days = list(data.days.values)  
+    #     reduced_prec = self.prec.sel(days = var_days)                     
+    #     digit1 = np.digitize(reduced_prec[self.var_id1], self.bins1, right = True)
+    #     digit2 = np.digitize(reduced_prec[self.var_id2], self.bins2, right = True)
         
-        l1, l2 = len(self.bins1)-1, len(self.bins2)-1 # BF: adjusted nbins to match np.histogram2d
+    #     l1, l2 = len(self.bins1)-1, len(self.bins2)-1 # BF: adjusted nbins to match np.histogram2d
 
-        if data is not None : 
-            data_over_density = np.zeros(shape=(l1,l2))
-            if mask is not None : 
-                mask = data.where(mask)
-        for i2 in range(l2): 
-            if data is not None: ## TEST AND DEBUG THIS
-                for i1 in range(l1):
-                    data_idx = tuple(np.argwhere((digit1==i1) & (digit2==i2)).T)
-                    if len(data_idx)>0 :
-                        data_over_density[i1, i2] = np.nanmean(data.values.flatten()[data_idx])
-                    else : data_over_density[i1, i2] = 0
-        if data is not None:
-            return data_over_density
+    #     if data is not None : 
+    #         data_over_density = np.zeros(shape=(l1,l2))
+    #         if mask is not None : 
+    #             mask = data.where(mask)
+    #     for i2 in range(l2): 
+    #         if data is not None: ## TEST AND DEBUG THIS
+    #             for i1 in range(l1):
+    #                 data_idx = tuple(np.argwhere((digit1==i1) & (digit2==i2)).T)
+    #                 if len(data_idx)>0 :
+    #                     data_over_density[i1, i2] = np.nanmean(data.values.flatten()[data_idx])
+    #                 else : data_over_density[i1, i2] = 0
+    #     if data is not None:
+    #         return data_over_density
         
     def compute_conditional_sum(self, sample1, sample2, data = None):
         """
@@ -829,8 +829,12 @@ class JointDistribution():
 
                 i_labels = []
                 for label in labels:
-                    i_labels.append(self.i_storms[label])
-
+                    ## some MCS appears in seg mask but not in FileTracking ? 
+                    try :
+                        i_labels.append(self.dict_i_storms_by_label[label])
+                    except KeyError: 
+                        print("Weird label :", label)
+                        
                 if attr in self.storms[0].__dict__.keys():
                     attr_list = [getattr(self.storms[i],attr) for i in i_labels]
                 elif attr in self.storms[0].clusters.__dict__.keys():
