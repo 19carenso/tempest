@@ -445,7 +445,7 @@ class Grid():
                 
         return ds
                 
-# Thes are super unclear but I got used to it..
+# These are super unclear but I got used to it..
     def compute_funcs_for_var_id(self, var_id='Prec', overwrite_var_id = False):
         """
         Save to netcdf all the funcs to apply to var_id, that were not already a key. 
@@ -492,8 +492,8 @@ class Grid():
         # Overide - If var_id is MCS (or maybe later contains MCS) - the funcs and keys to only compute the MCS_label
         if var_id == "MCS_label" or var_id == "MCS_label_Tb_Feng" : 
             key = var_id
-            keys = [key]
-            funcs_to_compute = [None]
+            keys = [key, "Rel_surface"]
+            funcs_to_compute = [None, None] # adding None here, adds funcs to MCS regridding
         
         if len(keys)>0 : 
             print(f"These keys : {keys} have to be computed.")
@@ -510,8 +510,8 @@ class Grid():
                 print(f"\n computing day {day} for funcs {funcs_to_compute}")
                 da_funcs = self.regrid_funcs_and_save_by_day(day, var_id, funcs_to_compute)
                 # if heavy is in funcs_to_compute, da_funcs will naturally have 4 items as if 3 more funcs but it's just 4 different keys
-                for i, da_func in enumerate(da_funcs):
-                    da_days_funcs[i].append(da_func)
+                for i_f, da_func in enumerate(da_funcs):
+                    da_days_funcs[i_f].append(da_func)
                 del da_funcs
                 gc.collect()
 
@@ -524,6 +524,7 @@ class Grid():
                 ## Could use the to_complete bool mentionned earlier in the function
                 var_ds = var_ds.assign(**{key: da_var_regrid})
                 
+            del da_day
             del da_days_funcs
             del da_var_regrid
             gc.collect()
@@ -545,6 +546,8 @@ class Grid():
         var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
 
         for var_regridded in  var_regridded_per_funcs:
+            print(var_regridded)
+            print(np.shape(var_regridded))
             if var_id == 'MCS_label' or var_id == "MCS_label_Tb_Feng":  
                 n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
                 da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
@@ -663,13 +666,13 @@ class Grid():
                 var_day.append(self.casestudy.handler.load_var(self, var_id, i_t)) # This loads quite a lot into memory. and where chunks couldcome usefull
             var_day = xr.concat(var_day,dim='time')
             
-            labels_regrid = self.get_labels_data_from_center_to_global(var_day)
+            labels_regrid, mcs_rel_surface = self.get_labels_data_from_center_to_global(var_day)
             labels_regrid = np.expand_dims(labels_regrid, axis=2) # try to add the dim for day on second position so that MCS is on third for labels_yxtm
-
+            mcs_rel_surface = np.expand_dims(mcs_rel_surface, axis=2)
             del var_day 
             gc.collect()
 
-            return [labels_regrid] # we put it into a list so that it is the same fashion than over variables that could have multiple funcs
+            return [labels_regrid, mcs_rel_surface] # we put it into a list so that it is the same fashion than over variables that could have multiple funcs
 
         elif len(temp_funcs_to_compute)>0 :     
             # Loop over i_t, then loop over funcs_to_compute as to call regrid_single_time_step only once per i_t
@@ -791,38 +794,19 @@ class Grid():
         
         x = data_on_center
         X = np.full((self.n_lat, self.n_lon,n_MCS),np.nan)
-        # X_counts = np.full((self.n_lat, self.n_lon,n_MCS),np.nan)
+        X_rel_surface = np.full((self.n_lat, self.n_lon,n_MCS),np.nan)
         
         for i, slice_i_lat in enumerate(self.slices_i_lat): 
             if i%10 == 0: print(i,end='..')
-            
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
-                if not self.fast :
-                    x_subsets = [x[:,slice_i_lat, slice_j_lon], 
-                             x[:,self.i_min[i,j], slice_j_lon]*self.alpha_i_min[i,j],
-                             x[:,self.i_max[i,j], slice_j_lon]*self.alpha_i_max[i,j],
-                             x[:,slice_i_lat, self.j_min[i,j]]*self.alpha_j_min[i,j],
-                             x[:,slice_i_lat, self.j_max[i,j]]*self.alpha_j_max[i,j],
-                             x[:,self.i_min[i,j], self.j_min[i,j]]*self.alpha_j_min[i,j]*self.alpha_i_min[i,j],
-                             x[:,self.i_min[i,j], self.j_max[i,j]]*self.alpha_j_max[i,j]*self.alpha_i_min[i,j],
-                             x[:,self.i_max[i,j], self.j_min[i,j]]*self.alpha_j_min[i,j]*self.alpha_i_max[i,j],
-                             x[:,self.i_max[i,j], self.j_max[i,j]]*self.alpha_j_max[i,j]*self.alpha_i_max[i,j]]
-                    
-                elif self.fast :
-                    x_subsets = [x[:,slice_i_lat, slice_j_lon]] # La 1ère dimension est celle du temps (i_t)
-                    
-                x_sub_unique = []
-                for x_subset in x_subsets:
-                    arr = np.array(x_subset).flatten()
-                    unique, unique_counts = np.unique(arr[~np.isnan(arr)].astype(int),return_counts=True)
-                    x_sub_unique.append(unique)
-                
-                x_unique, x_counts = np.unique(np.hstack(x_sub_unique),return_counts=True)
-                n_labs = len(x_unique)
-                X[i, j,:n_labs] = x_unique
-                # X_counts[i,j,:n_labs] = x_counts # How to combine counts from counts ?? linear combination using return_counts, return_index? That should be doable
-                
-        return X#, X_counts
+                x_subsets = x[:,slice_i_lat, slice_j_lon] # La 1ère dimension est celle du temps (i_t)   
+                arr = x_subsets.values
+                unique, unique_counts = np.unique(arr[~np.isnan(arr)].astype(int),return_counts=True)
+                n_labs = len(unique)
+                X[i, j,:n_labs] = unique
+                surf = np.prod(np.array(np.shape(x_subsets)))
+                X_rel_surface[i,j,:n_labs] = unique_counts/surf
+        return X, X_rel_surface
     
     def get_tail_data_from_center_to_global(self, data_on_center, treshold, is_relative):
         x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values #1st axis becomes time
