@@ -20,9 +20,8 @@ st = storm_tracker.StormTracker(gr, overwrite_storms = False, overwrite = True) 
 jd = joint_distrib.JointDistribution(gr, st)
 
 
-print(st.storms[0].growth_rate)
+print(st.ds_storms.isel(label = 0).growth_rate)
 
-st.save_storms()
 
 st =  storm_tracker.StormTracker(gr, overwrite_storms = False, overwrite = False) #overwrite = True is super long
 

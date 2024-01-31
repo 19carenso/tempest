@@ -8,6 +8,7 @@ import time
 import math 
 import xarray as xr 
 import pandas as pd
+import gc 
 
 import warnings
 from .load_toocan import load_toocan
@@ -42,15 +43,27 @@ class StormTracker():
 
         # get storm tracking data
         print("Loading storms...")
-        self.ds_storms = self.load_storms_tracking(overwrite_storms) #, self.label_storms, self.dict_i_storms_by_label
+        self.ds_storms, self.file_storms = self.load_storms_tracking(overwrite_storms) #, self.label_storms, self.dict_i_storms_by_label
         print(f"Time elapsed for loading storms: {time.time() - start_time:.2f} seconds")
     
-        ## adapt it to work with ds_storms
-        if self.overwrite and False:
-            for storm in self.ds_storms:
-                self.set_storm_growth_rate(storm, r_treshold=0.85)
-            
-            self.save_storms()
+        ## test and incubate in a func
+        if self.overwrite:
+            grw_var_names= ["growth_rate", "r_squared", "growth_r_squared", "decay_r_squared", "t0", "t_max", "t_f", "s_max"]
+            grw_vars = [ [] for _ in grw_var_names]
+            with xr.open_dataset(self.file_storms) as ds_storms:
+                for label in ds_storms.label:
+                    storm = ds_storms.sel(label = label)
+                    grw_output = self.get_storm_growth_rate(storm, r_treshold=0.85)
+                    for out, grw_var in zip(grw_output, grw_vars):
+                        grw_var.append(out)
+                grw_arr_vars = [np.array(grw_var) for grw_var in grw_vars]
+                grw_data_vars = [xr.DataArray(grw_arr_var, 
+                                            dims = ['label'], 
+                                            coords = {"label": ds_storms.label})            
+                                                for grw_arr_var in grw_arr_vars]
+                for grw_var_name, grw_data_var in zip(grw_var_names, grw_data_vars):
+                    ds_storms[grw_var_name] = grw_data_var
+                self.save_storms(ds_storms)
     
     def load_storms_tracking(self, overwrite):
         ## Make it a netcdf so that we don't struggle with loading it anymore
@@ -65,14 +78,23 @@ class StormTracker():
             paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
             storms = load_toocan(paths[0])+load_toocan(paths[1])
             # weird bug of latmin and lonmax being inverted ! 
-            for storm in storms :
+            filtered_storms = []
+
+            for storm in storms:
+                # Swap latmin and lonmax
                 save_latmin = storm.latmin
-                setattr(storm, "latmin", storm.lonmax)
-                setattr(storm, "lonmax", save_latmin)
-                #I'm trying to save data and time, this corresponds to the selected timerange
-                if storm.Utime_End/1800 < 960:
-                    storms.remove(storm)
-            
+                storm.latmin = storm.lonmax
+                storm.lonmax = save_latmin
+                
+                # Check the condition based on Utime_End
+                if storm.Utime_End / 1800 >= 960:
+                    # Add the storm to the new list if the condition is met
+                    filtered_storms.append(storm)
+
+            # Update the original list with the filtered storms
+            storms = filtered_storms
+            del filtered_storms
+            gc.collect()
             print("making ds storms ...")
             ds_storms = self.make_ds(storms)
             ds_storms.to_netcdf(file_storms)
@@ -84,14 +106,11 @@ class StormTracker():
         #     if label not in dict_i_storms_by_label.keys():
         #         dict_i_storms_by_label[label] = i
 
-        return ds_storms #, label_storms, dict_i_storms_by_label
+        return ds_storms, file_storms #, label_storms, dict_i_storms_by_label
 
-    def save_storms(self):
-        dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
-        file_storms = os.path.join(dir_out, "ds_storms.nc")
-        with open(file_storms, 'wb') as file:
-            pickle.dump(self.storms, file)
-            print("storms saved in pkl")
+    def save_storms(self, ds_storms):
+        os.remove(self.file_storms)
+        ds_storms.to_netcdf(self.file_storms)
             
     def _piecewise_linear(self, t:np.array,t_breaks:list,s_max:float):
         """
@@ -162,57 +181,54 @@ class StormTracker():
         
         return t_breaks,s_max,s_id
 
-    def set_storm_growth_rate(self, storm, r_treshold = 0.85, verbose = False, plot = False):
+    def get_storm_growth_rate(self, storm, r_treshold = 0.85, verbose = False, plot = False):
         """
         Given a storm object, update it's growth_rate attribute 
         Returns an ax object to plot the fit
         """
-        surf = np.array(storm.clusters.surfPix_172Wm2) * 16
+        u_i, u_e = storm.Utime_Init.values, storm.Utime_End.values
+        init= max(int(u_i/1800) - 960 , 0)
+        end = min(int(u_e/1800) - 960 , 959)+1
+        surf = storm.surfPix_172Wm2.values[init:end]*16
         
         if len(surf) <= 4 : 
-            growth_rate = np.nan
-            setattr(storm, 'growth_rate', growth_rate)
+            nan_output = [np.nan for _ in range(8)]
+            # setattr(storm, 'growth_rate', growth_rate)
             if verbose : print("A very short-lived storm passed by here...")
-            return None
+            return nan_output
         else : 
             time = np.arange(0, len(surf))
 
             s_max = max(surf)
             time_breaks = [0, len(surf)//2, len(surf)]
 
-            # warnings.filterwarnings("error", category=UndefinedMetricWarning)
             warnings.filterwarnings("error", category=OptimizeWarning)
 
-            try:
-                # Your existing code that raises the warning
+            try: # parfois ça marche pô
                 t_breaks, s_max, s_id = self._piecewise_fit(time, surf, time_breaks, s_max)
                 t0, t_max, t_f = t_breaks
                 r_squared = r2_score(surf, s_id)
                 growth_r_squared = r2_score(surf[:math.ceil(t_breaks[1])], s_id[:math.ceil(t_breaks[1])])
                 decay_r_squared = r2_score(surf[math.floor(t_breaks[1]):], s_id[math.floor(t_breaks[1]):])
                 growth_rate = s_max / (t_breaks[1] - t_breaks[0])
-                setattr(storm, 'growth_rate', growth_rate)
-                setattr(storm, 'growth_rate_r2', r_squared)
-                setattr(storm, 'growth_rate_r2_pos', growth_r_squared)
-                setattr(storm, 'growth_rate_r2_neg', decay_r_squared)
-                setattr(storm, 'growth_rate_t0', t0)
-                setattr(storm, 'growth_rate_t_max', t_max)
-                setattr(storm, 'growth_rate_t_f', t_f)
-                setattr(storm, 'growth_rate_s_max', s_max)
 
             except OptimizeWarning as e:
                 print("That's a complicated storm")
+                return nan_output
             
             except Exception as e:
                 # Handle the warning here, e.g., print a message or log it
                 print("Caught Exception:", e)
+                return nan_output
             
             if verbose : print(f"For storm with label {storm.label}, the growth rate computed by fitting a triangle is {growth_rate} with an r-score of {r_squared}")
         
-            return r_squared, growth_r_squared, decay_r_squared, *t_breaks, s_max
-    
+            return [growth_rate, r_squared, growth_r_squared, decay_r_squared, t0, t_max, t_f, s_max]
+        
     def make_ds(self, storms):
-        # Retrieve attribute names dynamically from the first object
+        """
+        TODO : the whole clusters part seems to only return np.nan... so not working
+        """
         attribute_names = [attr for attr in dir(storms[0]) if not callable(getattr(storms[0], attr)) and  not attr.startswith("clusters") and not attr.startswith("__")]
         print("Label wise attributes ", attribute_names)
         dict_storm = {attr: [getattr(obj, attr) for obj in storms if not attr.startswith("__")] for attr in attribute_names}
@@ -241,7 +257,7 @@ class StormTracker():
                 var = getattr(mcs_lfc, attr)
                 if len(var)>0:
                     storm_clusters[attr].append(var)
-
+                    
         Utime_min, Utime_max = 0,0
         for storm in storms : 
             Utime_min = min(Utime_min, storm.Utime_Init)
@@ -254,26 +270,30 @@ class StormTracker():
         n_time = 960 # all utime values possible within timerange
 
         for key in storm_clusters.keys():
-            print(key)
             # one cluster attributes is empty
             if len(storm_clusters[key])>0 : 
                 data = np.full((n_label, n_time), np.nan)
-                for list, index_Utime in zip(storm_clusters[key], storm_clusters["Utime"]):
+                for i_label, list, index_Utime in zip(np.arange(len(storm_clusters[key])), storm_clusters[key], storm_clusters["Utime"]):
                     for i, utime in enumerate(index_Utime): # peut-être relaxé pour utilise Utime_Init/1800 : Utime_End/1800
-                        idx_utime = int(utime/1800)-960 # Utime 
-                        data[idx_utime] = list[i]
+                        idx_utime = int(utime/1800)-960 # Utime
+                        if idx_utime >= 0 and idx_utime < 960: 
+                            data[i_label, idx_utime] = list[i] 
+                            # if idx_utime == 0  : print(i_label)
                 da = xr.DataArray(data, dims = ['label', 'time'], coords = {'label' : dict_storm['label'], 'time' : time})
-                
+                    
                 # handle same name 
                 if key =="olrmin":
                     data_vars["lifecycle_olrmin"] = da
                 else : 
                     data_vars[key] = da
-                    
+
         ds = xr.Dataset(data_vars)
-        
+        ds = ds.drop_duplicates('label', keep = False) #choix ici, attendre rep Laurent
+
         return ds
-    
+
+
+
 # if plot : 
 #     # Return ax object if plotting is necessary
 #     fig, ax = plt.subplots()

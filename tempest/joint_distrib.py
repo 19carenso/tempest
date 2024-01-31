@@ -2,10 +2,9 @@ import numpy as np
 import os
 import time
 import sys
-import glob
-import csv
 import pickle
 import time
+import xarray as xr 
 
 from skimage import measure # pylance: disable=import-error 
 from scipy.optimize import curve_fit
@@ -26,7 +25,7 @@ class JointDistribution():
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, storm_tracker = None, nd=4, var_id = "Prec", var_id_1 = "mean_Prec", var_id_2 = "max_Prec", overwrite=False, verbose = False, regionalize = False, dist_bintype = "invlogQ"):
+    def __init__(self, grid, storm_tracker = None, nd=4, var_id = "Prec", var_id_1 = "mean_Prec", var_id_2 = "max_Prec", dist_mask = True, overwrite=False, verbose = False, regionalize = False, dist_bintype = "invlogQ"):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -44,15 +43,20 @@ class JointDistribution():
         self.regionalize = regionalize
         self.nd = nd
         self.dist_bintype = dist_bintype
-        
         self.ditvi = grid.casestudy.days_i_t_per_var_id
         self.var_id = var_id
         self.prec = grid.get_var_id_ds(self.var_id) ## weird behavior, can't modify var_id input
+        if dist_mask == True : 
+            dist_mask = xr.where(self.prec.mean_Prec > 0.01, True, False)
+        elif dist_mask == False : 
+            dist_mask = True
+        elif dist_mask.shape == self.prec.shape:
+            self.dist_mask = dist_mask & xr.where(self.prec.Treshold_cond_alpha_50_Prec > 2, True, False)
         
         self.shape = np.shape(self.prec[self.var_id_1].to_numpy())
         
-        self.sample1 = self.prec[var_id_1].to_numpy().ravel()
-        self.sample2 = self.prec[var_id_2].to_numpy().ravel()
+        self.sample1 = self.prec[var_id_1].where(dist_mask).to_numpy().ravel()
+        self.sample2 = self.prec[var_id_2].where(dist_mask).to_numpy().ravel()
         
         self.overwrite = overwrite
 
@@ -90,13 +94,15 @@ class JointDistribution():
             print("Overwrite set to false so loading basics attributes from .npy")
             self.load_from_npy()
         
-
+    
         ## Make a class out of this so that it only has to be loaded once (super long like 30sec to 2mins....)
         if storm_tracker is not None:
             # is this best practice ?
-            self.storms = storm_tracker.storms
-            self.label_storms = storm_tracker.label_storms
-            self.dict_i_storms_by_label = storm_tracker.dict_i_storms_by_label
+            self.ds_storm = storm_tracker.ds_storms
+            self.file_storms = storm_tracker.file_storms
+            # self.storms = storm_tracker.storms
+            # self.label_storms = storm_tracker.label_storms
+            # self.dict_i_storms_by_label = storm_tracker.dict_i_storms_by_label
             self.labels_regridded_yxtm = storm_tracker.labels_regridded_yxtm
             self.mask_labels_regridded_yxt = storm_tracker.mask_labels_regridded_yxt
 
@@ -693,19 +699,14 @@ class JointDistribution():
 
         for i_bin in range(n_i):
             for j_bin in range(n_j):
-        
                 # where bin falls in x-y-t
                 mask_bin_yxt = self.get_mask_yxt(i_bin,j_bin)
-            
                 # where bin falls in x-y-t and MCS occurs
                 mask_bin_with_mcs_yxt = np.logical_and(mask_bin_yxt, self.mask_labels_regridded_yxt)
-                
                 # number of points in joint mask
                 count_bin_mcs = np.sum(mask_bin_with_mcs_yxt)
-                
                 # number of point in bin mask
-                count_bin = np.sum(mask_bin_yxt)
-                
+                count_bin = np.sum(mask_bin_yxt) 
                 bin_counts[i_bin,j_bin] = count_bin
                 # store this fraction
                 if count_bin >= bin_noise_treshold:
@@ -722,6 +723,9 @@ class JointDistribution():
         return bin_fraction_mcs, bin_noise, bin_counts
 
     def plot_data(self, data, data_noise = None, scale = 'linear', cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None)):
+        """
+        TODO : mask data, keep bins
+        """
         self.make_mask()
         
         if fig==None and ax==None: 
@@ -738,8 +742,8 @@ class JointDistribution():
         # -- Frame
         ax_show = ax.twinx().twiny()
         ax = set_frame_invlog(ax, self.dist1.ranks, self.dist2.ranks)
-        ax.set_xlabel(r"1$^\circ\times 1$day "+self.var_id_1)
-        ax.set_ylabel(r"4km-30mn "+self.var_id_2)
+        ax.set_xlabel(self.var_id_1)
+        ax.set_ylabel(self.var_id_2)
         # ax.set_title(title)
 
         # -- Density
@@ -773,7 +777,7 @@ class JointDistribution():
             # show 1-1 line
             ax_show.plot(x_branch_2,x_branch_2,'k--')
         
-        return ax
+        return ax, cb
     
     def get_labels_per_region(self):
         ### TODO, put this in settings when working on it again. Validate the regions otherwise
@@ -850,25 +854,27 @@ class JointDistribution():
 
         return out_ij
     
+
     def process_plot_var_cond_reducing_prec(self, var_id, var_cond_list, mask = True, func = "mean"):
-        ## TODO catch var_unit somehow for cleaner labels
         key = func+'_'+var_id
-        
+
+        if func == 'MCS':
+            da_var = self.grid.get_var_id_ds("MCS_label").sortby("days")[var_id]
         # Trying to avoid the prec bug, maybe it's due to prec dataset already being open within jd
-        if var_id == "Prec" : 
-            ds_var = self.prec.sortby("days")[key]
+        elif var_id == "Prec" : 
+            da_var = self.prec.sortby("days")[key]
         else :  
-            ds_var = self.grid.get_var_id_ds(var_id).sortby("days")[key]
+            da_var = self.grid.get_var_id_ds(var_id).sortby("days")[key]
             
-        var_days = list(ds_var.days.values)
-        ds_var = ds_var.sel(days = var_days).where(mask) # redundant ? 
-        var = ds_var.values.ravel()
+        var_days = list(da_var.days.values)
+        da_var = da_var.where(mask)
+        var = da_var.values.ravel()
         
         reduced_prec = self.prec.sel(days = var_days).where(mask)
         bincount_where_var_cond = []
         labels = []
         for cond_inf, cond_sup in zip(var_cond_list[:-1], var_cond_list[1:]):
-            spatial_var_where_cond = list(np.where((ds_var.values>cond_inf) & (ds_var.values<=cond_sup)))
+            spatial_var_where_cond = list(np.where((da_var.values>cond_inf) & (da_var.values<=cond_sup)))
             # print([(spatial_var_where_cond[i]) for i in range(3)])
             sample1_where_cond = reduced_prec[self.var_id_1].values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
             sample2_where_cond = reduced_prec[self.var_id_2].values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
@@ -890,8 +896,7 @@ class JointDistribution():
             self.plot_data(bincount/bincount_reduced_prec, scale = 'linear',  cmap=plt.cm.magma_r, vbds = (0, 1), fig = fig, ax = ax, label = label)
         
         return bincount_where_var_cond, bincount_reduced_prec
-    
-    
+     
     def compute_conditional_data_over_density(self, data = None, mask = None):         
         var_days = list(data.days.values)  
         n_i, n_j = self.bincount.shape
@@ -928,9 +933,48 @@ class JointDistribution():
         var_over_density = self.compute_conditional_data_over_density(ds_var, mask = mask) #more a da than ds but whatever
         if fig is None : 
             fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4.71))
-        self.plot_data(var_over_density, data_noise = None, cmap = cmap, branch=False, vbds = vbds, fig = fig, ax = ax, label = key)
+        ax, cb = self.plot_data(var_over_density, data_noise = None, cmap = cmap, branch=False, vbds = vbds, fig = fig, ax = ax, label = key)
+        return ax, cb
         
+    def add_mcs_var_from_labels(self, var_id):
+        """
+        Not the same var_id than usual
+        """
+        with self.grid.get_var_id_ds("MCS_label").sortby("days") as ds_mcs:
+            
+            ds_var_by_label = xr.open_dataset(self.file_storms)[var_id] 
+            arr = np.full(np.shape(ds_mcs["MCS_label"])[:-1], np.nan)
+            # Messy stuff bc MCS in here
+            for i_lat ,lat in enumerate(ds_mcs.lat_global):
+                for i_lon, lon in enumerate(ds_mcs.lon_global):
+                    for i_day, day in enumerate(ds_mcs.days):
+                        sub_ds = ds_mcs.sel(days = day, lat_global = lat, lon_global = lon)
+                        labels = sub_ds["MCS_label"].values
+                        rel_surfaces = sub_ds["Rel_surface"].values
+                        valid_labels = labels[~np.isnan(labels)].astype('int')
+                        if len(valid_labels)>0:
+                            labels = valid_labels[np.isin(valid_labels, ds_var_by_label.label)]
+                            rel_surfaces = rel_surfaces[:len(valid_labels)][np.isin(valid_labels, ds_var_by_label.label)]
+                            if len(labels)>0:
+                                var_values = ds_var_by_label.loc[dict(label=labels)].values          
+                                rel_surfaces = rel_surfaces[:len(labels)]
+                                arr[i_lat, i_lon, i_day] = np.average(var_values, weights = rel_surfaces) 
+                                
+            
+            da_var = xr.DataArray(arr, dims=["lat_global", "lon_global", "days"],
+                                    coords={"lat_global": ds_mcs.lat_global,
+                                            "lon_global": ds_mcs.lon_global,
+                                            "days": ds_mcs.days})
+            
+            ds_mcs = xr.merge([ds_mcs, da_var.rename(var_id)])
+            
+            file_mcs_ds = self.grid.get_var_ds_file("MCS_label")
+            os.remove(file_mcs_ds)
+            ds_mcs.to_netcdf(file_mcs_ds)
+
         # def process_plot_var_cond(self, var_id, var_cond_list, mask = None, func = "mean"):
+   
+   
     #     ## TODO catch var_unit somehow for cleaner labels
     #     key = func+'_'+var_id
     #     var_ds = self.grid.get_var_id_ds(var_id)
