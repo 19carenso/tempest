@@ -457,7 +457,7 @@ class Grid():
         
         if var_id == "Prec" :
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
-            funcs = self.func_names +["cond_alpha_50"]#+ ["heavy", "supra", "ultra", "wet", "convective"]
+            funcs = ["cond_alpha_25"] #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
         else: 
             funcs = self.func_names
         
@@ -546,8 +546,6 @@ class Grid():
         var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
 
         for var_regridded in  var_regridded_per_funcs:
-            print(var_regridded)
-            print(np.shape(var_regridded))
             if var_id == 'MCS_label' or var_id == "MCS_label_Tb_Feng":  
                 n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
                 da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 

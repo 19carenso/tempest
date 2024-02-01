@@ -854,7 +854,6 @@ class JointDistribution():
 
         return out_ij
     
-
     def process_plot_var_cond_reducing_prec(self, var_id, var_cond_list, mask = True, func = "mean"):
         key = func+'_'+var_id
 
@@ -917,8 +916,7 @@ class JointDistribution():
                             data_over_density[d1, d2] = np.nanmean(to_mean)
         if data is not None:
             return data_over_density
-    
-    
+     
     def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, vbds = (None, None), fig = None, ax = None):
         key = func+'_'+var_id
             # Trying to avoid the prec bug, maybe it's due to prec dataset already being open within jd
