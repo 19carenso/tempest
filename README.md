@@ -56,6 +56,11 @@ export PYTHONPATH=/path/to/your_project:$PYTHONPATH
 
 This is really reccommanded.
 
+### When adding a new storm class 
+
+You must modify Handler the add_storm_tracking_variables in casestudy
+Grid must also be modified as it catches storm functions based on string names 
+
 ### Authors
 
 Maxime Carenso & Benjamin Fildier

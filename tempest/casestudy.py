@@ -352,6 +352,10 @@ class CaseStudy():
         
         if "MCS_label_Tb_Feng" not in self.variables_names:
             self.variables_names.append("MCS_label_Tb_Feng")
+
+        if "Conv_MCS_label" not in self.variables_names:
+            self.variables_names.append("Conv_MCS_label")
+
         # let's get rid off rel_table because of duplicates issue (not quantified)
         # if vanilla :
         #     # I love SQL time
@@ -365,6 +369,8 @@ class CaseStudy():
             ## I have a feeling that joint distrib doesn't work well otherwise but to check
         self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id["Prec"]
         self.days_i_t_per_var_id["MCS_label_Tb_Feng"] = self.days_i_t_per_var_id["Prec"]
+        self.days_i_t_per_var_id["Conv_MCS_label"] = self.days_i_t_per_var_id["Prec"]
+
         return self.variables_names, self.days_i_t_per_var_id
 
     def skip_prec_i_t(self, var_id): 

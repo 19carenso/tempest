@@ -81,6 +81,7 @@ class StormTracker():
             filtered_storms = []
 
             for storm in storms:
+                # print(storm)
                 # Swap latmin and lonmax
                 save_latmin = storm.latmin
                 storm.latmin = storm.lonmax
@@ -93,11 +94,14 @@ class StormTracker():
 
             # Update the original list with the filtered storms
             storms = filtered_storms
-            del filtered_storms
-            gc.collect()
             print("making ds storms ...")
+            ## !!!!!!!!!!!!
+            print(type(storms))
+            print(storms[0])
             ds_storms = self.make_ds(storms)
             ds_storms.to_netcdf(file_storms)
+            del filtered_storms
+            gc.collect()
             print("ds storms saved ! ")
 
         # label_storms = [ds_storms['label'].isel(i) for i in range(len(ds_storms['label']))]
@@ -167,7 +171,7 @@ class StormTracker():
             return self._piecewise_linear(t,p[0:N_breaks],p[-1])
 
         # we add bounds so that time breaks stay ordered
-        t_lower_bounds = [-np.inf] + t_breaks_0[:-1]
+        t_lower_bounds = [0] + t_breaks_0[:-1] # 0 instead of -np.inf
         t_upper_bounds = t_breaks_0[1:] + [np.inf]
         
         s_lower_bounds = [0] # Positive or null surfaces. 
@@ -229,6 +233,7 @@ class StormTracker():
         """
         TODO : the whole clusters part seems to only return np.nan... so not working
         """
+
         attribute_names = [attr for attr in dir(storms[0]) if not callable(getattr(storms[0], attr)) and  not attr.startswith("clusters") and not attr.startswith("__")]
         print("Label wise attributes ", attribute_names)
         dict_storm = {attr: [getattr(obj, attr) for obj in storms if not attr.startswith("__")] for attr in attribute_names}

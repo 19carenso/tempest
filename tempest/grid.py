@@ -409,7 +409,6 @@ class Grid():
             required_coordinates = ['lat_global', 'lon_global', 'days']
             missing_coordinates = [coord for coord in required_coordinates if coord not in ds.coords]
             if missing_coordinates:
-                # Il est corrompu on dirait... ROBIN ALED
                 print(f"The dataset is missing the following coordinates: {missing_coordinates}")
         return ds
 
@@ -457,7 +456,7 @@ class Grid():
         
         if var_id == "Prec" :
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
-            funcs = ["cond_alpha_25"] #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
+            funcs = ["cond_alpha_00"] #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
         else: 
             funcs = self.func_names
         
@@ -494,7 +493,11 @@ class Grid():
             key = var_id
             keys = [key, "Rel_surface"]
             funcs_to_compute = [None, None] # adding None here, adds funcs to MCS regridding
-        
+        elif var_id == "Conv_MCS_label":
+            key = var_id
+            keys = [key, "Conv_Rel_surface"]
+            funcs_to_compute = [None, None]
+
         if len(keys)>0 : 
             print(f"These keys : {keys} have to be computed.")
             da_days_funcs = [[] for _ in funcs_to_compute]
@@ -540,13 +543,11 @@ class Grid():
         """
         Compute multiple functions on new grid for a given day
         """	
-
         outputs_da = [] ##list of full day DataArray for each func (so typically of len 1 for MCS_label, 2 for any variable, 3 for Prec)
-
         var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
 
         for var_regridded in  var_regridded_per_funcs:
-            if var_id == 'MCS_label' or var_id == "MCS_label_Tb_Feng":  
+            if var_id == 'MCS_label' or var_id == "MCS_label_Tb_Feng" or var_id == "Conv_MCS_label":  
                 n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
                 da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
                                         coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
@@ -655,18 +656,20 @@ class Grid():
 
             return results
         
-        if var_id == "MCS_label" or var_id == "MCS_label_Tb_Feng":
+        if var_id == "MCS_label" or var_id == "MCS_label_Tb_Feng" or var_id == "Conv_MCS_label":
             ## MCS have a special treatment as they are the storm tracking inputs, they don't use regrid_single_time_step
             ## Any variable with MCS within should actually be treated differently.
             
             var_day = []
             for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
+                print(f"Loading {i_t} for day {day}")
                 var_day.append(self.casestudy.handler.load_var(self, var_id, i_t)) # This loads quite a lot into memory. and where chunks couldcome usefull
             var_day = xr.concat(var_day,dim='time')
             
             labels_regrid, mcs_rel_surface = self.get_labels_data_from_center_to_global(var_day)
             labels_regrid = np.expand_dims(labels_regrid, axis=2) # try to add the dim for day on second position so that MCS is on third for labels_yxtm
             mcs_rel_surface = np.expand_dims(mcs_rel_surface, axis=2)
+            conv_mcs_rel_surface = np.expand_dims(conv_mcs_rel_surface, axis = 2)
             del var_day 
             gc.collect()
 

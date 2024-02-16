@@ -46,12 +46,15 @@ class JointDistribution():
         self.ditvi = grid.casestudy.days_i_t_per_var_id
         self.var_id = var_id
         self.prec = grid.get_var_id_ds(self.var_id) ## weird behavior, can't modify var_id input
-        if dist_mask == True : 
+
+        if type(dist_mask) is not bool:
+            if dist_mask.shape == self.prec[var_id_1].shape:
+                self.dist_mask = dist_mask & xr.where(self.prec.mean_Prec > 0.001, True, False) #self.prec.Treshold_cond_alpha_50_Prec > 2
+        elif dist_mask == True : 
             dist_mask = xr.where(self.prec.mean_Prec > 0.01, True, False)
         elif dist_mask == False : 
             dist_mask = True
-        elif dist_mask.shape == self.prec.shape:
-            self.dist_mask = dist_mask & xr.where(self.prec.Treshold_cond_alpha_50_Prec > 2, True, False)
+
         
         self.shape = np.shape(self.prec[self.var_id_1].to_numpy())
         
@@ -477,10 +480,11 @@ class JointDistribution():
         
         return popt_1, x_1, y_1, popt_2, x_2, y_2, func
 
-    def plot(self, branch = False):
+    def plot(self, mask = True, branch = False, fig=None, ax=None):
         self.make_mask()
 
-        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(4.8, 4.85))
+        if fig == ax == None :
+            fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(4.8, 4.85))
         
         Z = self.norm_density.T
 
@@ -499,8 +503,15 @@ class JointDistribution():
         # -- Density
         pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
 
-        # -- Masks multiscale categories
-        ax_show.imshow(self.mask_show.T,alpha=0.5,origin='lower')
+        # -- Masks multiscale categories and colorbar
+        if mask : 
+            pcm_mask = ax_show.imshow(self.mask_show.T,alpha=1,origin='lower')
+            cb = fig.colorbar(pcm_mask, ax=ax_show)
+            cb.set_label("Multiscale categories") 
+            
+        else : 
+            cb = fig.colorbar(pcm, ax=ax_show)
+            cb.set_label("Normalized density" ) 
 
         if branch : 
             # -- Branches
@@ -518,6 +529,8 @@ class JointDistribution():
 
             # show 1-1 line
             ax_show.plot(x_branch_2,x_branch_2,'k--')
+        
+        return ax, cb
             
     def get_mask_yxt(self, d1, d2, var_days = None): #regional = False, lat_slice = None, lon_slice = None
         dj = self.joint_digit(d1+1, d2+1) # because np.digitize returns 1 for the i_bin 0
@@ -578,7 +591,7 @@ class JointDistribution():
         
         return centers  
 
-    def make_map(self, mask_yxt):
+    def make_map(self, mask_yxt, data = None, func = np.sum, threshold = (-np.inf, np.inf)):
         ## image
         # cmap = plt.cm.bone_r
         # cmap = plt.cm.Blues
@@ -606,8 +619,18 @@ class JointDistribution():
         lon_meshgrid, lat_meshgrid = np.meshgrid(lon_1d, lat_1d)
         
         # data
-        Z = np.sum(mask_yxt,axis=-1) # count
-        Next = np.sum(Z)
+        if func == np.sum:
+            Z = np.sum(mask_yxt,axis=-1) # count
+            Next = np.sum(Z)
+        elif func == "data_weighted":
+            sum_weights = np.sum(data, axis=-1)
+            mask = sum_weights == 0
+            mask = np.repeat(mask[..., np.newaxis], 20, axis = -1)
+            masked_values = np.ma.masked_array(mask_yxt, mask)
+            masked_weights = np.ma.masked_array(data, mask)
+            weighted_means = np.ma.average(masked_values, axis=-1, weights=masked_weights)
+            Z = weighted_means.filled(np.nan)
+            Next = np.nansum(Z)
         # show
         # im = ax.pcolormesh(np.ravel(lonarray_dyamond),np.ravel(latarray_dyamond),np.ravel(Z),transform=ccrs.PlateCarree(),alpha=0.9,cmap=cmap)
         with warnings.catch_warnings():
@@ -638,7 +661,7 @@ class JointDistribution():
         cbar.ax.set_ylabel('Bincount (#)')
 
         return ax
-
+    
 ## MCS labels
 
     def labels_in_mask_yxt(self, mask_yxt):
@@ -654,12 +677,14 @@ class JointDistribution():
         
         return unique_labels
     
-    def labels_in_joint_bin(self, i_bin, j_bin, regional=False, lat_slice=None, lon_slice=None):
+    def labels_in_joint_bin(self, i_bin, j_bin, region_mask=None):
         """
         For each joint extreme in bin (i,j), merge MCS labels occurring in their spatiotemporal occurrence.
         LATER: also store their relative area.
         """
         mask_yxt = self.get_mask_yxt(i_bin,j_bin)
+        if region_mask is not None : 
+            mask_yxt = np.logical_and(mask_yxt, region_mask)
         labels_i_j = self.labels_in_mask_yxt(mask_yxt)
         return labels_i_j
     
@@ -691,7 +716,7 @@ class JointDistribution():
             
         return mask_all_labels
     
-    def get_mcs_bin_fraction(self, bin_noise_treshold = 4):
+    def get_mcs_bin_fraction(self, bin_noise_treshold = 4, region_mask = None):
         n_i, n_j = self.bincount.shape
         bin_fraction_mcs = np.full((n_i,n_j),np.nan)
         bin_noise = np.full((n_i,n_j),np.nan)
@@ -701,6 +726,9 @@ class JointDistribution():
             for j_bin in range(n_j):
                 # where bin falls in x-y-t
                 mask_bin_yxt = self.get_mask_yxt(i_bin,j_bin)
+                if region_mask is not None :
+                    mask_bin_yxt = np.logical_and(mask_bin_yxt, region_mask)
+
                 # where bin falls in x-y-t and MCS occurs
                 mask_bin_with_mcs_yxt = np.logical_and(mask_bin_yxt, self.mask_labels_regridded_yxt)
                 # number of points in joint mask
@@ -722,7 +750,7 @@ class JointDistribution():
         # return this fraction
         return bin_fraction_mcs, bin_noise, bin_counts
 
-    def plot_data(self, data, data_noise = None, scale = 'linear', cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None)):
+    def plot_data(self, data, data_noise = None, scale = 'linear', cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None), cb_bool = True):
         """
         TODO : mask data, keep bins
         """
@@ -753,9 +781,12 @@ class JointDistribution():
             show_joint_histogram(ax_show, Z_noise, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, alpha=0.1)
 
         # -- Colorbar
-        cb = fig.colorbar(pcm, ax=ax_show)
-        # cb.set_label('Normalized density')
-        cb.set_label(label)
+        if cb_bool : 
+            cb = fig.colorbar(pcm, ax=ax_show)
+            # cb.set_label('Normalized density')
+            cb.set_label(label)
+        else :
+            cb = None
         
         # # -- Masks multiscale categories
         # ax_show.imshow(self.mask_show.T,alpha=0.5,origin='lower')
@@ -796,7 +827,7 @@ class JointDistribution():
                                     self.af_rf_labels_in_jdist, self.io_wp_labels_in_jdist, self.se_as_labels_in_jdist, self.ct_as_labels_in_jdist]
         print(f"Time elapsed for loading regions labels: {time.time() - start_time:.2f} seconds")
        
-    def get_labels_in_jdist_bins(self, regional = False, lat_slice=None, lon_slice=None):
+    def get_labels_in_jdist_bins(self, regional = None):
         """
         Return matrix N_i,N_j,N_MCS of labels in each bin of the joint distribution
         """
@@ -808,7 +839,7 @@ class JointDistribution():
         for i_bin in range(n_i):
             for j_bin in range(n_j):
                 # print(i_bin,j_bin)
-                labels_bin = np.unique(self.labels_in_joint_bin(i_bin,j_bin, regional, lat_slice, lon_slice))
+                labels_bin = np.unique(self.labels_in_joint_bin(i_bin,j_bin, regional))
                 # number of labels
                 n_labs = len(labels_bin)
                 n_store = min(n_mcs,n_labs)
@@ -817,39 +848,51 @@ class JointDistribution():
                 
         return labels_ij
     
-    def storm_attributes_on_jdist(self, attr, func, region_labels_in_jdist = None):
-
+    def storm_attributes_on_jdist(self, attr, func, region_mask=None, fast = True):
+        # given an attribute that is a variable of st.ds_storm, 
         n_i, n_j = self.bincount.shape
+        ## build output
         out_ij = np.full((n_i, n_j), np.nan)
+        # Open storm dataset
+        storms = xr.open_dataset(self.file_storms, mode='r')
+        # Retrieve valid labels because of unknown labels bug
+        valid_labels = storms.label.values
+        # If fast remove the first 20 bins of each
+        if fast : 
+            n_i_start, n_j_start = 10, 10
+        else : 
+            n_i_start, n_j_start = 0, 0
+        # Iterate over bins 
 
-        for i_bin in range(n_i):
+        for i_bin in range(n_i_start, n_i):
             if i_bin%1==0 : print(i_bin, end='')
-            for j_bin in range(n_j):
-                if region_labels_in_jdist is None : 
-                    labels = self.labels_in_jdist[i_bin,j_bin]
+            for j_bin in range(n_j_start, n_j):
+                #If a peculiar region defined in settings 
+                if region_mask is None : 
+                    labels = self.labels_in_joint_bin(i_bin,j_bin)
                 else : 
-                    labels = region_labels_in_jdist[i_bin, j_bin]
+                    labels = self.labels_in_joint_bin(i_bin, j_bin, region_mask)
+
+                # Clean label
                 labels = np.unique(labels[~np.isnan(labels)])
+                # Select valid ones from dataset available labels
+                valid_selected_labels = [label for label in labels if label in valid_labels]
+                """
+                Missing labels seems to be the ones that I removed from dataset (labels between 1.9e5 to 2.1e5)
+                """
+                # Print the missing ones
+                # unvalid_selected_labels = [label for label in labels if label not in valid_labels]
+                # if len(unvalid_selected_labels)>0:
+                #     print(f"At joint bin, {i_bin},{j_bin} labels that were not valid are : {unvalid_selected_labels}")
+                # Retrieve attr values from dataset
+                attr_values = storms.sel(label = valid_selected_labels)[attr].values
 
-                i_labels = []
-                for label in labels:
-                    ## some MCS appears in seg mask but not in FileTracking ? 
-                    try :
-                        i_labels.append(self.dict_i_storms_by_label[label])
-                    except KeyError: 
-                        print("Weird label :", label)
-                        
-                if attr in self.storms[0].__dict__.keys():
-                    attr_list = [getattr(self.storms[i],attr) for i in i_labels]
-                elif attr in self.storms[0].clusters.__dict__.keys():
-                    attr_list = [np.mean(getattr(self.storms[i].clusters,attr)) for i in i_labels]
-
-                if len(attr_list) > 0:
+                if len(attr_values) > 0:
                     try:
-                        out_ij[i_bin,j_bin] = getattr(np,'nan%s'%func)(attr_list)
+                        out_ij[i_bin,j_bin] = func(attr_values)
                     except ValueError:
                         print(len(labels))
-                        print(attr_list)
+                        print(attr_values)
                         print("Oops!  That was no valid number.  Try again...")
 
         return out_ij

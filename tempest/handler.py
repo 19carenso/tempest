@@ -12,13 +12,14 @@ import time
 import subprocess
 
 from .thermo import saturation_specific_humidity
+from . import storm_tracker
 
 class Handler():
     def __init__(self, settings_path):
         self.settings_path = settings_path
         with open(self.settings_path, 'r') as file:
             self.settings = yaml.safe_load(file)
-        self.rel_table = self.load_rel_table(self.settings['REL_TABLE'])
+        # self.rel_table = self.load_rel_table(self.settings['REL_TABLE'])
 
     def load_seg(self, grid, i_t):
         path_toocan = self.get_filename_classic(i_t) ## There is the differences
@@ -26,6 +27,48 @@ class Handler():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
             img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(-30, 30))# because otherwise goes to -40, 40
         return img_toocan
+
+    def load_conv_seg(self, grid, i_t):
+        path_toocan = self.get_filename_classic(i_t) ## There is the differences
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=xr.SerializationWarning)
+            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(-30, 30))# because otherwise goes to -40, 40
+
+        img_labels = np.unique(img_toocan)[:-1]
+
+        # reload storm everytime, fuck it.. dependencies might be doomed
+        print("Building Storm Tracker of MCS_label, no overwrite")
+        st = storm_tracker.StormTracker(grid, label_var_id = "MCS_label", overwrite = False) # takes 2sec with all overwrite to false
+
+        ds_storm = xr.open_dataset(st.file_storms)
+
+        valid_labels = ds_storm.label
+
+        img_valid_labels = [label for label in img_labels if label in valid_labels]
+
+        print(len(img_valid_labels))
+        for label in img_valid_labels :
+            # get storm dataarrays
+            storm = ds_storm.sel(label = label)
+            if storm.r_squared.values >= 0.8:
+                # retrieve time_init in ditvi format
+                time_init = storm.Utime_Init.values/1800
+                # compute growth init from growth_rate t0 fit
+                growth_init = np.round(time_init + storm.t0.values, 2)
+                # compute growth end from growth_rate t_max fit
+                growth_end = np.round(time_init + storm.t_max.values, 2)
+                # End of MCS life time in ditvi format for check
+                time_end = storm.Utime_End.values/1800
+                # print(label, growth_init, i_t, growth_end, time_end)
+                if i_t >= growth_init and i_t <= growth_end:
+                    pass
+                else : 
+                    img_toocan.where(img_toocan==label)
+
+            img_toocan = img_toocan.where(img_toocan != label, np.nan)
+
+            return img_toocan
 
     def load_seg_tb_feng(self, grid, i_t):
         path_toocan = self.get_filename_tb_feng(i_t) ## There is the differences
