@@ -456,7 +456,7 @@ class Grid():
         
         if var_id == "Prec" :
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
-            funcs = ["cond_alpha_00"] #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
+            funcs = self.func_names+ ["cond_alpha_50"] #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
         else: 
             funcs = self.func_names
         
@@ -669,7 +669,6 @@ class Grid():
             labels_regrid, mcs_rel_surface = self.get_labels_data_from_center_to_global(var_day)
             labels_regrid = np.expand_dims(labels_regrid, axis=2) # try to add the dim for day on second position so that MCS is on third for labels_yxtm
             mcs_rel_surface = np.expand_dims(mcs_rel_surface, axis=2)
-            conv_mcs_rel_surface = np.expand_dims(conv_mcs_rel_surface, axis = 2)
             del var_day 
             gc.collect()
 

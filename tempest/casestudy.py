@@ -5,6 +5,8 @@ import glob
 import tarfile
 import shutil 
 import json 
+import xarray as xr
+
 
 import numpy as np
 import datetime as dt
@@ -46,6 +48,7 @@ class CaseStudy():
         if not os.path.exists(self.data_out):
             os.makedirs(self.data_out)
             print(f"First instance of {self.name}. It's directory has been created at : {self.data_out}")
+
         self.variables_names, self.days_i_t_per_var_id, self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self._set_variables(self.overwrite)    
         
     def _set_variables(self, overwrite):
@@ -55,9 +58,15 @@ class CaseStudy():
             if not os.path.exists(json_path) : print(f"Creation of {json_path}")
             if overwrite : print(f"Overwriting the existing variables in {json_path}")
             self.days_i_t_per_var_id = {}
-            self.var_names_2d = self._load_var_id_in_data_in(True)
-            self.var_names_3d = self._load_var_id_in_data_in(False)
-            self.variables_names = self.var_names_2d + self.var_names_3d
+            if self.model ==  'DYAMOND_SAM_post_20_days' or self.model == 'DYAMOND_SAM':
+                self.var_names_2d = self._load_var_id_in_data_in(True)
+                self.var_names_3d = self._load_var_id_in_data_in(False)
+
+            elif self.model == 'DYAMOND_II_Winter_SAM':
+                self.var_names_2d = self._read_var_id_in_data_in()
+                self.var_names_3d = []
+                
+            self.variables_names = self.var_names_2d + self.var_names_3d                
             self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
             # quite manual
             self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
@@ -114,7 +123,35 @@ class CaseStudy():
         # BOX is [lat_min, lat_max, lon_min, lon_max]
         self.lat_slice = slice(self.settings['BOX'][0], self.settings['BOX'][1])
         self.lon_slice = slice(self.settings['BOX'][2], self.settings['BOX'][3])
+
+    def _get_day_and_i_t(self, filename, timestamp_pattern):
+        # starting date
+        dict_date_ref = self.settings["DATE_REF"]
+        date_ref = dt.datetime(year=dict_date_ref["year"], month=dict_date_ref["month"], day=dict_date_ref["day"])
         
+        def get_datetime_and_i_t(filename):
+            # Extract the timestamp from the file path
+            match = re.search(timestamp_pattern, filename)
+            # print(filename, match)
+            if match:
+                timestamp = int(match.group(1))
+                # print(timestamp)
+                # Calculate the delta in seconds
+                delta_t = dt.timedelta(seconds=timestamp * 7.5)
+                # Calculate the current date
+                date_current = date_ref + delta_t
+
+                i_t = int(timestamp / 240) 
+                return date_current, i_t
+            else:
+                return None  # Handle cases where the timestamp couldn't be extracted
+
+        # time dimension
+        date_time, i_t = get_datetime_and_i_t(filename)
+        day = date_time.strftime("%y-%m-%d")
+        return day, i_t
+
+
     def _load_var_id_in_data_in(self, bool_2d):
         """
         this functions loads the data from either DIR_DATA_2D_IN or DIR_DATA_3D_IN
@@ -123,8 +160,9 @@ class CaseStudy():
 
         :return
             var_id: list of variables found
-            self.days_i_t_per_var_id: a dictionnary that contains the days and correspong indexes per var_id    
-                            self.days_i_t_per_var_id[var_id] = dict with keys the dates and values the indexes
+            
+        :update self.days_i_t_per_var_id: a dictionnary that contains the days and correspong indexes per var_id    
+            self.days_i_t_per_var_id[var_id] = dict with keys the dates and values the indexes
         """
         var_names = []
         if bool_2d:
@@ -135,34 +173,6 @@ class CaseStudy():
             dir = self.settings['DIR_DATA_3D_IN']
             variable_pattern = re.compile(r'_([A-Za-z0-9]+)\.nc$') 
             timestamp_pattern = re.compile(r'_(\d{10})_[A-Za-z0-9]+\.nc$')
-
-        def get_day_and_i_t(filename, timestamp_pattern):
-                # starting date
-                dict_date_ref = self.settings["DATE_REF"]
-                date_ref = dt.datetime(year=dict_date_ref["year"], month=dict_date_ref["month"], day=dict_date_ref["day"])
-                
-                def get_datetime_and_i_t(filename):
-                    # Extract the timestamp from the file path
-                    match = re.search(timestamp_pattern, filename)
-                    # print(filename, match)
-                    if match:
-                        timestamp = int(match.group(1))
-                        # print(timestamp)
-                        # Calculate the delta in seconds
-                        delta_t = dt.timedelta(seconds=timestamp * 7.5)
-                        # Calculate the current date
-                        date_current = date_ref + delta_t
-
-                        i_t = int(timestamp / 240) 
-                        return date_current, i_t
-                    else:
-                        return None  # Handle cases where the timestamp couldn't be extracted
-
-                # time dimension
-                
-                date_time, i_t = get_datetime_and_i_t(filename)
-                day = date_time.strftime("%y-%m-%d")
-                return day, i_t
 
         # Define a regular expression pattern to extract variable names from filenames.
         files = glob.glob(dir +'/*.nc')
@@ -176,14 +186,48 @@ class CaseStudy():
                     var_names.append(var_id)
                     self.days_i_t_per_var_id[var_id] = {}
                     
-                day, i_t = get_day_and_i_t(filename, timestamp_pattern)
+                day, i_t = self._get_day_and_i_t(filename, timestamp_pattern)
                 if day not in list(self.days_i_t_per_var_id[var_id].keys()):
                     self.days_i_t_per_var_id[var_id][day] = [i_t]
                 else :
                     self.days_i_t_per_var_id[var_id][day].append(i_t)
                     
         return var_names
-    
+
+    def _read_var_id_in_data_in(self):
+        """
+        equivalent of _load_var_id_in_data_in but for Dyamond WINTER
+        """
+        dir = self.settings['DIR_DATA_2D_IN']
+        files = glob.glob(dir + '*.nc')
+        first_file = files[0]
+        first_ds = xr.open_dataset(first_file)
+        var_names = []
+        for var_id, variable in first_ds.data_vars.items():
+            # Check if 'time', 'lon', and 'lat' are in the dimensions of the variable
+            if {'time', 'lon', 'lat'}.issubset(set(variable.dims)):
+                # If the condition is met, append the variable name to the list
+                var_names.append(var_id)
+                self.days_i_t_per_var_id[var_id] = {}
+
+        timestamp_pattern = re.compile(r'(\d{4}\d{2}\d{2}\d{2})\.nc')
+
+        for var_id in var_names:
+            for filename in sorted(files):
+                dict_date_ref = self.settings["DATE_REF"]
+                date_ref = dt.datetime(year=dict_date_ref["year"], month=dict_date_ref["month"], day=dict_date_ref["day"])
+                match = re.search(timestamp_pattern, filename)
+                timestamp = int(match.group(1))
+                date = dt.datetime.strptime(str(timestamp), "%Y%m%d%H")
+                day = date.strftime("%y-%m-%d")
+                delta_t = (date - date_ref)/3600
+                i_t = delta_t.seconds
+                if day not in list(self.days_i_t_per_var_id[var_id].keys()):
+                    self.days_i_t_per_var_id[var_id][day] = [i_t]
+                else: 
+                    self.days_i_t_per_var_id[var_id][day].append(i_t)
+        return var_names
+
     def _chek_variables_days_and_i_t(self):
         for var_id in self.variables_names:
             print(var_id)

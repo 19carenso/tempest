@@ -19,6 +19,7 @@ class Handler():
         self.settings_path = settings_path
         with open(self.settings_path, 'r') as file:
             self.settings = yaml.safe_load(file)
+        self.dict_date_ref = self.settings["DATE_REF"]
         # self.rel_table = self.load_rel_table(self.settings['REL_TABLE'])
 
     def load_seg(self, grid, i_t):
@@ -64,11 +65,11 @@ class Handler():
                 if i_t >= growth_init and i_t <= growth_end:
                     pass
                 else : 
-                    img_toocan.where(img_toocan==label)
+                    img_toocan = img_toocan.where(img_toocan != label, np.nan)
+            else : 
+                img_toocan = img_toocan.where(img_toocan != label, np.nan)
 
-            img_toocan = img_toocan.where(img_toocan != label, np.nan)
-
-            return img_toocan
+        return img_toocan
 
     def load_seg_tb_feng(self, grid, i_t):
         path_toocan = self.get_filename_tb_feng(i_t) ## There is the differences
@@ -106,6 +107,14 @@ class Handler():
         string_timestamp = str(int(int(i_t) * 240)).zfill(10)
         result = f"DYAMOND_9216x4608x74_7.5s_4km_4608_"+string_timestamp
         return result
+
+    def get_dyamond_2_filename_from_i_t(self, i_t):
+        date_ref = dt.datetime(year=self.dict_date_ref["year"], month=self.dict_date_ref["month"], day=self.dict_date_ref["day"])
+        delta_seconds = i_t * 3600
+        new_date = date_ref + dt.timedelta(seconds=delta_seconds)
+        timestamp = new_date.strftime("%Y%m%d%H")
+        result = 'pr_rlut_sam_winter_'+timestamp+'.nc'
+        return result 
 
     def get_filename_classic(self, i_t):
         root = self.settings['DIR_STORM_TRACK']
@@ -209,31 +218,38 @@ class Handler():
             return da_new_var
             
         else : 
-            root = self.get_rootname_from_i_t(i_t)
-            if var_id in var_2d : 
-                path_data_in = grid.settings["DIR_DATA_2D_IN"]
+            path_data_in = grid.settings["DIR_DATA_2D_IN"]
+            if "DYAMOND_SAM" in self.settings["MODEL"]:
+                root = self.get_rootname_from_i_t(i_t)
                 filename_var = root+f".{var_id}.2D.nc"
                 filepath_var = os.path.join(path_data_in, filename_var)
-                var = xr.open_dataarray(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)[0]
-            elif var_id in var_3d :
-                assert z is not None
-                path_data_in = grid.settings["DIR_DATA_3D_IN"]
-                # chunks = {'z': 74} # Always 74 vertical level in these data
-                filename_var = root+f"_{var_id}.nc"
+                if var_id in var_2d : 
+                    var = xr.open_dataarray(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)[0]
+                elif var_id in var_3d :
+                    assert z is not None
+                    path_data_in = grid.settings["DIR_DATA_3D_IN"]
+                    # chunks = {'z': 74} # Always 74 vertical level in these data
+                    filename_var = root+f"_{var_id}.nc"
+                    filepath_var = os.path.join(path_data_in, filename_var)
+                    temp = os.path.join(self.settings["DIR_TEMPDATA"], grid.casestudy.name)
+                    temp_var = os.path.join(temp, var_id)
+                    if not os.path.exists(temp_var):
+                        os.makedirs(temp_var)
+                    temp_file = os.path.join(temp_var, f"z_ind_{z}.nc")
+                    # values from np.argwhere((np.array(file_lat)>=-30) & (np.array(file_lat)<=30)) with file lat being original file lat values
+                    str_lat_slice = f"{1527},{3080}"
+                    # values from np.argwhere((np.array(file_lat)>=0) & (np.array(file_lat)<=360)) with file lon being original lon values
+                    str_lon_slice = f"{0},{9215}"
+                    ncks_command = f"ncks -O -d lon,{str_lon_slice} -d lat,{str_lat_slice} -d time,{0} -d z,{z} {filepath_var} {temp_file}"
+                    subprocess.run(ncks_command, shell=True)
+                    # old # var = xr.open_dataset(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0, z=z) #, chunks = chunks)
+                    var = xr.open_dataset(temp_file)
+
+            elif 'DYAMOND_II_Winter_SAM' in self.settings["MODEL"]:
+                filename_var = self.get_dyamond_2_filename_from_i_t(i_t)
                 filepath_var = os.path.join(path_data_in, filename_var)
-                temp = os.path.join(self.settings["DIR_TEMPDATA"], grid.casestudy.name)
-                temp_var = os.path.join(temp, var_id)
-                if not os.path.exists(temp_var):
-                    os.makedirs(temp_var)
-                temp_file = os.path.join(temp_var, f"z_ind_{z}.nc")
-                # values from np.argwhere((np.array(file_lat)>=-30) & (np.array(file_lat)<=30)) with file lat being original file lat values
-                str_lat_slice = f"{1527},{3080}"
-                # values from np.argwhere((np.array(file_lat)>=0) & (np.array(file_lat)<=360)) with file lon being original lon values
-                str_lon_slice = f"{0},{9215}"
-                ncks_command = f"ncks -O -d lon,{str_lon_slice} -d lat,{str_lat_slice} -d time,{0} -d z,{z} {filepath_var} {temp_file}"
-                subprocess.run(ncks_command, shell=True)
-                # old # var = xr.open_dataset(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0, z=z) #, chunks = chunks)
-                var = xr.open_dataset(temp_file)
+                var = xr.open_dataset(filepath_var)[var_id][0].load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice) #lon is useless but lat important because otherwise its -60 60
+
             return var
         
     def load_prec(self, grid, i_t):
@@ -338,3 +354,15 @@ class Handler():
         del cond_prec
         gc.collect()
         return om850
+    
+
+####### THIS SECTION HAS FUNCTION FOR THE DYAMOND II WINTER PROJECT 
+    
+    def read_prec(self, grid, i_t):
+        previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
+        current_precac = self.load_var(grid, 'pracc', i_t)
+        prec = current_precac - previous_precac
+        del previous_precac
+        del current_precac
+        gc.collect()
+        return prec
