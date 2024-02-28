@@ -32,7 +32,7 @@ class StormTracker():
         self.verbose = verbose
         self.label_var_id = label_var_id
 
-        if self.label_var_id == 'MCS_label':
+        if self.label_var_id == 'MCS_label' or self.label_var_id == 'Conv_MCS_label':
             self.dir_storm = self.settings['DIR_STORM_TRACKING']
         elif self.label_var_id == 'MCS_label_Tb_Feng':
             self.dir_storm = self.settings['DIR_STORM_TRACKING_TB_FENG']
@@ -76,7 +76,12 @@ class StormTracker():
         else : 
             if overwrite : print("Loading storms again because overwrite_storms is True")
             paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
-            storms = load_toocan(paths[0])+load_toocan(paths[1])
+            # For dyamond 2 there are many filetracking for other models in the dir_storm
+            sam_paths = []
+            for path in paths : 
+                if "SAM" in path :
+                    sam_paths.append(path)
+            storms = load_toocan(sam_paths[0])+load_toocan(sam_paths[1])
             # weird bug of latmin and lonmax being inverted ! 
             filtered_storms = []
 

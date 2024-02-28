@@ -13,7 +13,7 @@ from math import ceil
 
 from .distribution import Distribution
 # from .load_toocan import load_toocan
-
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import cartopy.crs as ccrs
@@ -88,7 +88,7 @@ class JointDistribution():
             self.bin_locations_stored = False
 
             self.compute_distribution(self.sample1, self.sample2)
-            self.compute_normalized_density(self.sample1, self.sample2)
+            self.norm_density = self.compute_normalized_density(self.sample1, self.sample2)
             
             self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()
             
@@ -108,6 +108,7 @@ class JointDistribution():
             # self.dict_i_storms_by_label = storm_tracker.dict_i_storms_by_label
             self.labels_regridded_yxtm = storm_tracker.labels_regridded_yxtm
             self.mask_labels_regridded_yxt = storm_tracker.mask_labels_regridded_yxt
+            self.st_label_var_id = storm_tracker.label_var_id
 
             if self.verbose:
                 print("Retrieve labels in jdist")
@@ -291,18 +292,21 @@ class JointDistribution():
         # Compute probability density
         self.bincount, _, _ = np.histogram2d(x=sample1.flatten(),y=sample2.flatten(),bins=(self.bins1,self.bins2),density=False)        
  
-    def compute_joint_density(self, sample1, sample2, method='default'):
+    def compute_joint_density(self, sample1 = None, sample2 = None, method='default'):
         """Compute joint density. Method 'default' uses np.histogram2d, 'manual' uses np.ditigize and np.bincount."""
         
-        if self.sample1.shape == sample2.shape:
+        if sample1 is None : sample1 = self.sample1
+        if sample2 is None : sample2 = self.sample2
+
+        if sample1.shape == sample2.shape:
             
             if method == 'default':
 
                 # Compute bin count
-                self.bincount, _, _ = np.histogram2d(x=self.sample1.flatten(),y=self.sample2.flatten(),bins=(self.bins1,self.bins2),density=False)
+                bincount, _, _ = np.histogram2d(x=sample1.flatten(),y=sample2.flatten(),bins=(self.bins1,self.bins2),density=False)
 
                 # Compute probability density
-                self.density, _, _ = np.histogram2d(x=self.sample1.flatten(),y=self.sample2.flatten(),bins=(self.bins1,self.bins2),density=True)
+                density, _, _ = np.histogram2d(x=sample1.flatten(),y=sample2.flatten(),bins=(self.bins1,self.bins2),density=True)
 
             elif method == 'manual':
 
@@ -317,8 +321,8 @@ class JointDistribution():
                 dx_2 = np.diff(self.bins2)
 
                 # initialize
-                self.bincount = np.zeros(shape = (l1, l2))
-                self.density = np.zeros(shape = (l1, l2))
+                bincount = np.zeros(shape = (l1, l2))
+                density = np.zeros(shape = (l1, l2))
                 
                 # compute
                 for i2 in range(1,l2): 
@@ -326,22 +330,27 @@ class JointDistribution():
                     idx = tuple(np.argwhere(digit2==i2).T)
                     
                     # bin count
-                    self.bincount[:, i2-1] = np.bincount(digit1[idx], minlength=l1+1)[1:] # BF: adjusted nbins to match np.histogram2d (removed first element of bincount)
+                    bincount[:, i2-1] = np.bincount(digit1[idx], minlength=l1+1)[1:] # BF: adjusted nbins to match np.histogram2d (removed first element of bincount)
                     
                     # density = bincount / Ntot / bin width
-                    self.density[:, i2-1] = self.bincount[:, i2-1]/Ntot/dx_1/dx_2[i2-1]
+                    density[:, i2-1] = self.bincount[:, i2-1]/Ntot/dx_1/dx_2[i2-1]
+        
+        return bincount, density
     
-    def compute_normalized_density(self, verbose = False, method='default'):
+    def compute_normalized_density(self, sample1 = None, sample2 = None, verbose = False, method='default'):
         """Compute joint density normalized by the expected density of independent variables : N_ij * N_tot / N_i / N_j."""
 
-        if self.bincount is None:
+        if sample1 is None : sample1 = self.sample1
+        if sample2 is None : sample2 = self.sample2
+
+        if self.bincount is None or self.density is None :
             
-            self.compute_joint_density(self.sample1, self.sample2, method = method)
+            self.bincount, self.density = self.compute_joint_density(self.sample1, self.sample2, method = method)
         
         l1, l2 = len(self.bins1)-1, len(self.bins2)-1 # BF: adjusted nbins to match np.histogram2d
 
-        digit1 = np.digitize(self.sample1, self.bins1, right = True)
-        digit2 = np.digitize(self.sample2, self.bins2, right = True)
+        digit1 = np.digitize(sample1, self.bins1, right = True)
+        digit2 = np.digitize(sample2, self.bins2, right = True)
 
         N1 = [np.sum(digit1==i1) for i1 in range(l1)]
         N2 = [np.sum(digit2==i2) for i2 in range(l2)]
@@ -350,47 +359,16 @@ class JointDistribution():
             Norm = Ntot / np.outer(N1, N2)
         Norm[np.isinf(Norm)] = 1
 
-        self.norm_density = Norm * self.bincount
+        norm_density = Norm * self.bincount
+
+        return norm_density
         
     def compute_conditional_locations(self, var_days=None):
-        if var_days is not None : 
-            var_shape = self.prec[self.var_id_1].sel(days = var_days).shape
-        else : 
-            var_days = list(self.prec.days.values)  
-            var_shape = self.shape
-            
-        digit1 = np.digitize(self.prec[self.var_id_1].sel(days = var_days).values.flatten(), self.bins1, right = True)
-        digit2 = np.digitize(self.prec[self.var_id_2].sel(days = var_days).values.flatten(), self.bins2, right = True)
-        
-        digit1_3d = np.reshape(digit1,var_shape)
-        digit2_3d = np.reshape(digit2,var_shape)
+        if var_days is None : var_days = list(self.prec.days.values)  
+        digit1_3d = np.digitize(self.prec[self.var_id_1].sel(days = var_days).values, self.bins1, right = True)
+        digit2_3d = np.digitize(self.prec[self.var_id_2].sel(days = var_days).values, self.bins2, right = True)
         
         return digit1_3d, digit2_3d
-        
-    # def compute_conditional_data_over_density(self, data = None, mask = None):
-    #     """
-    #     TODO Could be adapted to use joint_digit BF formalism but seems to work well as is, be careful
-    #     """         
-    #     var_days = list(data.days.values)  
-    #     reduced_prec = self.prec.sel(days = var_days)                     
-    #     digit1 = np.digitize(reduced_prec[self.var_id1], self.bins1, right = True)
-    #     digit2 = np.digitize(reduced_prec[self.var_id2], self.bins2, right = True)
-        
-    #     l1, l2 = len(self.bins1)-1, len(self.bins2)-1 # BF: adjusted nbins to match np.histogram2d
-
-    #     if data is not None : 
-    #         data_over_density = np.zeros(shape=(l1,l2))
-    #         if mask is not None : 
-    #             mask = data.where(mask)
-    #     for i2 in range(l2): 
-    #         if data is not None: ## TEST AND DEBUG THIS
-    #             for i1 in range(l1):
-    #                 data_idx = tuple(np.argwhere((digit1==i1) & (digit2==i2)).T)
-    #                 if len(data_idx)>0 :
-    #                     data_over_density[i1, i2] = np.nanmean(data.values.flatten()[data_idx])
-    #                 else : data_over_density[i1, i2] = 0
-    #     if data is not None:
-    #         return data_over_density
         
     def compute_conditional_sum(self, sample1, sample2, data = None):
         """
@@ -431,8 +409,8 @@ class JointDistribution():
         self.mask_jdist_0_90 = np.outer(self.dist1.ranks >= 0, self.dist2.ranks >= 90)
         self.mask_jdist_below_90 = np.outer(self.dist1.ranks < 90, self.dist2.ranks < 90)
         # mask above diagonal
-        self.mask_lower_diag = dig_2D_i <= dig_2D_j
-        self.mask_upper_diag = dig_2D_i > dig_2D_j
+        self.mask_lower_diag = dig_2D_i < dig_2D_j
+        self.mask_upper_diag = dig_2D_i >= dig_2D_j
         # mask correlated and anticorrelated
         self.mask_corr = self.norm_density > 1
         self.mask_anticorr = np.logical_and(self.norm_density < 1,self.bincount>0)
@@ -501,15 +479,23 @@ class JointDistribution():
         ax.set_title(title)
 
         # -- Density
-        pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
+        
 
         # -- Masks multiscale categories and colorbar
         if mask : 
+            pcm = show_joint_histogram(ax_show, np.zeros_like(Z), scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
             pcm_mask = ax_show.imshow(self.mask_show.T,alpha=1,origin='lower')
-            cb = fig.colorbar(pcm_mask, ax=ax_show)
-            cb.set_label("Multiscale categories") 
-            
+            # cb = fig.colorbar(pcm_mask, ax=ax_show)
+            # cb.set_label("Multiscale categories") 
+            values = np.unique([1, 2, 3, 4])
+            cmap = mpl.cm.viridis
+            norm = mpl.colors.BoundaryNorm(np.arange(0.5, 5), cmap.N)
+            cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+                                ax=ax_show, ticks=values, spacing='proportional')
+            cb.set_ticklabels(['Only km-scale', 'Mostly km-scale', 'Mostly mesoscale', 'Only mesoscale'])
+
         else : 
+            pcm = show_joint_histogram(ax_show, Z[:,:], scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
             cb = fig.colorbar(pcm, ax=ax_show)
             cb.set_label("Normalized density" ) 
 
@@ -536,23 +522,14 @@ class JointDistribution():
         dj = self.joint_digit(d1+1, d2+1) # because np.digitize returns 1 for the i_bin 0
         
         if var_days is not None : 
-            d3_1, d3_2 = self.compute_conditional_locations(var_days = var_days)
+            prec_days = list(self.prec.days.values)  
+            days_filter = np.array([prec_day in var_days for prec_day in prec_days])
+            d3_1, d3_2 = self.digit_3d_1[:,:,days_filter], self.digit_3d_2[:,:,days_filter] # I suspect that its here that i loose a lot of time
         else : 
             d3_1, d3_2 = self.digit_3d_1, self.digit_3d_2
         dj_3d = self.joint_digit(d3_1, d3_2)
         
         mask = dj_3d == dj
-        
-        ## TODO : just use masks compatibility for regionality... with .where
-        # if regional:
-        #     region_mask = np.zeros_like(mask, dtype = bool)
-        #     if lat_slice is not None and lon_slice is not None:
-        #         if lon_slice.start < lon_slice.stop:
-        #             region_mask[lat_slice, lon_slice] = mask[lat_slice, lon_slice] 
-        #         elif lon_slice.stop < lon_slice.start:
-        #             region_mask[lat_slice, slice(0, lon_slice.stop)]= mask[lat_slice, slice(0, lon_slice.stop)]
-        #             region_mask[lat_slice, slice(lon_slice.start, 360)]= mask[lat_slice, slice(lon_slice.start, 360)]
-        #     mask = region_mask
             
         return mask
         
@@ -660,7 +637,7 @@ class JointDistribution():
         cbar = fig.colorbar(im, cax=cax, orientation='vertical')
         cbar.ax.set_ylabel('Bincount (#)')
 
-        return ax
+        return ax, cbar
     
 ## MCS labels
 
@@ -901,25 +878,29 @@ class JointDistribution():
         key = func+'_'+var_id
 
         if func == 'MCS':
-            da_var = self.grid.get_var_id_ds("MCS_label").sortby("days")[var_id]
+            da_var = self.grid.get_var_id_ds(self.st_label_var_id).sortby("days")[var_id]
         # Trying to avoid the prec bug, maybe it's due to prec dataset already being open within jd
         elif var_id == "Prec" : 
             da_var = self.prec.sortby("days")[key]
         else :  
             da_var = self.grid.get_var_id_ds(var_id).sortby("days")[key]
+        
+        
             
         var_days = list(da_var.days.values)
+        if isinstance(mask, np.ndarray):
+            mask  = mask[:,:,:len(var_days)] # adapt mask days length
         da_var = da_var.where(mask)
         var = da_var.values.ravel()
         
-        reduced_prec = self.prec.sel(days = var_days).where(mask)
+        reduced_prec = self.prec.sel(days = var_days)
         bincount_where_var_cond = []
         labels = []
         for cond_inf, cond_sup in zip(var_cond_list[:-1], var_cond_list[1:]):
             spatial_var_where_cond = list(np.where((da_var.values>cond_inf) & (da_var.values<=cond_sup)))
             # print([(spatial_var_where_cond[i]) for i in range(3)])
-            sample1_where_cond = reduced_prec[self.var_id_1].values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
-            sample2_where_cond = reduced_prec[self.var_id_2].values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
+            sample1_where_cond = reduced_prec[self.var_id_1].where(mask).values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
+            sample2_where_cond = reduced_prec[self.var_id_2].where(mask).values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
             bincount_cond, _, _ = np.histogram2d(x=sample1_where_cond, y=sample2_where_cond, bins = (self.bins1, self.bins2), density = False)
             bincount_where_var_cond.append(bincount_cond)
             labels.append(f"{cond_inf} < {key} <= {cond_sup}")
@@ -939,58 +920,59 @@ class JointDistribution():
         
         return bincount_where_var_cond, bincount_reduced_prec
      
-    def compute_conditional_data_over_density(self, data = None, mask = None):         
+    def compute_conditional_data_over_density(self, data = None, mask = None, plot_func = np.nanmean):         
         var_days = list(data.days.values)  
+        prec_days = list(self.prec.days.values)  
+        days_filter = np.array([prec_day in var_days for prec_day in prec_days])
+
         n_i, n_j = self.bincount.shape
-        
-        if data is not None : 
-            data_over_density = np.full(shape=(n_i,n_j), fill_value=np.nan)
-            if mask is not None : 
-                data = data.where(mask)
-                
+        data_over_density = np.full(shape=(n_i,n_j), fill_value=np.nan)
+
         for d2 in range(n_j): 
-                for d1 in range(n_i):
-                    data_where_joint_bin = self.get_mask_yxt(d1, d2, var_days=var_days)
-                    # return data_where_joint_bin
-                    # data_idx = tuple(np.argwhere((digit1==i1) & (digit2==i2)).T)
-                    if np.any(data_where_joint_bin==True):
-                        to_mean = data.where(data_where_joint_bin)
-                        if not np.all(np.isnan(to_mean)):
-                            data_over_density[d1, d2] = np.nanmean(to_mean)
-        if data is not None:
-            return data_over_density
+            for d1 in range(n_i):
+                data_where_joint_bin = self.get_mask_yxt(d1, d2, var_days=var_days)
+                data_where_joint_bin = np.logical_and(data_where_joint_bin, mask[:,:,days_filter])
+
+                if np.any(data_where_joint_bin==True):
+                    to_mean = data.where(data_where_joint_bin)
+                    if not np.all(np.isnan(to_mean)):
+                        data_over_density[d1, d2] = plot_func(to_mean)
+
+        return data_over_density
      
-    def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, vbds = (None, None), fig = None, ax = None):
+    def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, plot_func = np.nanmean, vbds = (None, None), fig = None, ax = None):
         key = func+'_'+var_id
             # Trying to avoid the prec bug, maybe it's due to prec dataset already being open within jd
         if var_id == "Prec" : 
             ds_var = self.prec.sortby("days")[key]
+        elif func == 'MCS':
+            ds_var = self.grid.get_var_id_ds(self.st_label_var_id).sortby("days")[var_id]
         else :  
             ds_var = self.grid.get_var_id_ds(var_id).sortby("days")[key]
             
         var_days = list(ds_var.days.values)
-        ds_var = ds_var.sel(days = var_days).where(mask) # redundant ? 
+        ds_var = ds_var.sel(days = var_days) #.where(mask) # redundant ? 
+        var_over_density = self.compute_conditional_data_over_density(ds_var, mask = mask, plot_func = np.nanmean) #more a da than ds but whatever
         
-        var_over_density = self.compute_conditional_data_over_density(ds_var, mask = mask) #more a da than ds but whatever
         if fig is None : 
             fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4.71))
         ax, cb = self.plot_data(var_over_density, data_noise = None, cmap = cmap, branch=False, vbds = vbds, fig = fig, ax = ax, label = key)
         return ax, cb
         
-    def add_mcs_var_from_labels(self, var_id):
+    def add_mcs_var_from_labels(self, var_id, norm_rel_surf = 'lin'):
         """
         Not the same var_id than usual
         """
-        with self.grid.get_var_id_ds("MCS_label").sortby("days") as ds_mcs:
+        with self.grid.get_var_id_ds(self.st_label_var_id).sortby("days") as ds_mcs:
             
             ds_var_by_label = xr.open_dataset(self.file_storms)[var_id] 
-            arr = np.full(np.shape(ds_mcs["MCS_label"])[:-1], np.nan)
+            arr = np.full(np.shape(ds_mcs[self.st_label_var_id])[:-1], np.nan)
             # Messy stuff bc MCS in here
             for i_lat ,lat in enumerate(ds_mcs.lat_global):
                 for i_lon, lon in enumerate(ds_mcs.lon_global):
                     for i_day, day in enumerate(ds_mcs.days):
                         sub_ds = ds_mcs.sel(days = day, lat_global = lat, lon_global = lon)
-                        labels = sub_ds["MCS_label"].values
+                        labels = sub_ds[self.st_label_var_id].values
                         rel_surfaces = sub_ds["Rel_surface"].values
                         valid_labels = labels[~np.isnan(labels)].astype('int')
                         if len(valid_labels)>0:
@@ -998,10 +980,21 @@ class JointDistribution():
                             rel_surfaces = rel_surfaces[:len(valid_labels)][np.isin(valid_labels, ds_var_by_label.label)]
                             if len(labels)>0:
                                 var_values = ds_var_by_label.loc[dict(label=labels)].values          
-                                rel_surfaces = rel_surfaces[:len(labels)]
+                                rel_surfaces = rel_surfaces[:len(labels)] ##this filter here should be pointless...
+                                if norm_rel_surf == 'lin' : 
+                                    adjustment = np.sum(rel_surfaces)
+                                    rel_surfaces = rel_surfaces / adjustment # so that it sums up to 1 
+                                if norm_rel_surf == 'fro' :
+                                    frob = np.linalg.norm(rel_surfaces)
+                                    rel_surfaces = rel_surfaces / frob
+
                                 arr[i_lat, i_lon, i_day] = np.average(var_values, weights = rel_surfaces) 
                                 
-            
+            if norm_rel_surf == 'lin': 
+                var_id = var_id+'_surf_adj'
+            elif norm_rel_surf == 'fro':
+                var_id = var_id+'_surf_fro_adj'
+
             da_var = xr.DataArray(arr, dims=["lat_global", "lon_global", "days"],
                                     coords={"lat_global": ds_mcs.lat_global,
                                             "lon_global": ds_mcs.lon_global,
@@ -1009,7 +1002,7 @@ class JointDistribution():
             
             ds_mcs = xr.merge([ds_mcs, da_var.rename(var_id)])
             
-            file_mcs_ds = self.grid.get_var_ds_file("MCS_label")
+            file_mcs_ds = self.grid.get_var_ds_file(self.st_label_var_id)
             os.remove(file_mcs_ds)
             ds_mcs.to_netcdf(file_mcs_ds)
 

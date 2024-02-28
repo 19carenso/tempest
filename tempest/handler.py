@@ -22,6 +22,60 @@ class Handler():
         self.dict_date_ref = self.settings["DATE_REF"]
         # self.rel_table = self.load_rel_table(self.settings['REL_TABLE'])
 
+    def load_var(self, grid, var_id, i_t, z = None): 
+        """
+        Load a variable at specified i_t.
+        If the variable is a new one, calls the appropriate function, that will recursively call load_var
+        If the variable is 3D one, it will return a dataset instead.
+            Must be handled in your designed funcs that depends on 3D vars
+        """
+        new_var_names = grid.casestudy.new_variables_names
+        var_2d = grid.casestudy.var_names_2d
+        var_3d = grid.casestudy.var_names_3d
+        new_var_funcs = grid.casestudy.new_var_functions
+        
+        if var_id in new_var_names:
+            if hasattr(self, new_var_funcs[var_id]):
+                load_func = getattr(self, new_var_funcs[var_id])
+            else : print(f"Handler has no method {new_var_funcs[var_id]}")
+            da_new_var = load_func(grid, i_t)
+            return da_new_var
+            
+        else : 
+            path_data_in = grid.settings["DIR_DATA_2D_IN"]
+            if "DYAMOND_SAM" in self.settings["MODEL"]:
+                root = self.get_rootname_from_i_t(i_t)
+                filename_var = root+f".{var_id}.2D.nc"
+                filepath_var = os.path.join(path_data_in, filename_var)
+                if var_id in var_2d : 
+                    var = xr.open_dataarray(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)[0]
+                elif var_id in var_3d :
+                    assert z is not None
+                    path_data_in = grid.settings["DIR_DATA_3D_IN"]
+                    # chunks = {'z': 74} # Always 74 vertical level in these data
+                    filename_var = root+f"_{var_id}.nc"
+                    filepath_var = os.path.join(path_data_in, filename_var)
+                    temp = os.path.join(self.settings["DIR_TEMPDATA"], grid.casestudy.name)
+                    temp_var = os.path.join(temp, var_id)
+                    if not os.path.exists(temp_var):
+                        os.makedirs(temp_var)
+                    temp_file = os.path.join(temp_var, f"z_ind_{z}.nc")
+                    # values from np.argwhere((np.array(file_lat)>=-30) & (np.array(file_lat)<=30)) with file lat being original file lat values
+                    str_lat_slice = f"{1527},{3080}"
+                    # values from np.argwhere((np.array(file_lat)>=0) & (np.array(file_lat)<=360)) with file lon being original lon values
+                    str_lon_slice = f"{0},{9215}"
+                    ncks_command = f"ncks -O -d lon,{str_lon_slice} -d lat,{str_lat_slice} -d time,{0} -d z,{z} {filepath_var} {temp_file}"
+                    subprocess.run(ncks_command, shell=True)
+                    # old # var = xr.open_dataset(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0, z=z) #, chunks = chunks)
+                    var = xr.open_dataset(temp_file)
+
+            elif 'DYAMOND_II_Winter_SAM' in self.settings["MODEL"]:
+                filename_var = self.get_dyamond_2_filename_from_i_t(i_t)
+                filepath_var = os.path.join(path_data_in, filename_var)
+                var = xr.open_dataset(filepath_var)[var_id][0].load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice) #lon is useless but lat important because otherwise its -60 60
+
+            return var
+         
     def load_seg(self, grid, i_t):
         path_toocan = self.get_filename_classic(i_t) ## There is the differences
         with warnings.catch_warnings():
@@ -108,14 +162,6 @@ class Handler():
         result = f"DYAMOND_9216x4608x74_7.5s_4km_4608_"+string_timestamp
         return result
 
-    def get_dyamond_2_filename_from_i_t(self, i_t):
-        date_ref = dt.datetime(year=self.dict_date_ref["year"], month=self.dict_date_ref["month"], day=self.dict_date_ref["day"])
-        delta_seconds = i_t * 3600
-        new_date = date_ref + dt.timedelta(seconds=delta_seconds)
-        timestamp = new_date.strftime("%Y%m%d%H")
-        result = 'pr_rlut_sam_winter_'+timestamp+'.nc'
-        return result 
-
     def get_filename_classic(self, i_t):
         root = self.settings['DIR_STORM_TRACK']
 
@@ -197,60 +243,6 @@ class Handler():
             return int(digit)
         else:
             return None
-
-    def load_var(self, grid, var_id, i_t, z = None): 
-        """
-        Load a variable at specified i_t.
-        If the variable is a new one, calls the appropriate function, that will recursively call load_var
-        If the variable is 3D one, it will return a dataset instead.
-            Must be handled in your designed funcs that depends on 3D vars
-        """
-        new_var_names = grid.casestudy.new_variables_names
-        var_2d = grid.casestudy.var_names_2d
-        var_3d = grid.casestudy.var_names_3d
-        new_var_funcs = grid.casestudy.new_var_functions
-        
-        if var_id in new_var_names:
-            if hasattr(self, new_var_funcs[var_id]):
-                load_func = getattr(self, new_var_funcs[var_id])
-            else : print(f"Handler has no method {new_var_funcs[var_id]}")
-            da_new_var = load_func(grid, i_t)
-            return da_new_var
-            
-        else : 
-            path_data_in = grid.settings["DIR_DATA_2D_IN"]
-            if "DYAMOND_SAM" in self.settings["MODEL"]:
-                root = self.get_rootname_from_i_t(i_t)
-                filename_var = root+f".{var_id}.2D.nc"
-                filepath_var = os.path.join(path_data_in, filename_var)
-                if var_id in var_2d : 
-                    var = xr.open_dataarray(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)[0]
-                elif var_id in var_3d :
-                    assert z is not None
-                    path_data_in = grid.settings["DIR_DATA_3D_IN"]
-                    # chunks = {'z': 74} # Always 74 vertical level in these data
-                    filename_var = root+f"_{var_id}.nc"
-                    filepath_var = os.path.join(path_data_in, filename_var)
-                    temp = os.path.join(self.settings["DIR_TEMPDATA"], grid.casestudy.name)
-                    temp_var = os.path.join(temp, var_id)
-                    if not os.path.exists(temp_var):
-                        os.makedirs(temp_var)
-                    temp_file = os.path.join(temp_var, f"z_ind_{z}.nc")
-                    # values from np.argwhere((np.array(file_lat)>=-30) & (np.array(file_lat)<=30)) with file lat being original file lat values
-                    str_lat_slice = f"{1527},{3080}"
-                    # values from np.argwhere((np.array(file_lat)>=0) & (np.array(file_lat)<=360)) with file lon being original lon values
-                    str_lon_slice = f"{0},{9215}"
-                    ncks_command = f"ncks -O -d lon,{str_lon_slice} -d lat,{str_lat_slice} -d time,{0} -d z,{z} {filepath_var} {temp_file}"
-                    subprocess.run(ncks_command, shell=True)
-                    # old # var = xr.open_dataset(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0, z=z) #, chunks = chunks)
-                    var = xr.open_dataset(temp_file)
-
-            elif 'DYAMOND_II_Winter_SAM' in self.settings["MODEL"]:
-                filename_var = self.get_dyamond_2_filename_from_i_t(i_t)
-                filepath_var = os.path.join(path_data_in, filename_var)
-                var = xr.open_dataset(filepath_var)[var_id][0].load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice) #lon is useless but lat important because otherwise its -60 60
-
-            return var
         
     def load_prec(self, grid, i_t):
         """
@@ -357,12 +349,31 @@ class Handler():
     
 
 ####### THIS SECTION HAS FUNCTION FOR THE DYAMOND II WINTER PROJECT 
-    
+    def get_winter_2_datetime_from_i_t(self, i_t):
+        date_ref = dt.datetime(year=self.dict_date_ref["year"], month=self.dict_date_ref["month"], day=self.dict_date_ref["day"])
+        delta = dt.timedelta(seconds=i_t*3600)
+        datetime = delta+date_ref
+        return datetime
+
+    def get_dyamond_2_filename_from_i_t(self, i_t):
+        new_date = self.get_winter_2_datetime_from_i_t(i_t)
+        timestamp = new_date.strftime("%Y%m%d%H")
+        result = 'pr_rlut_sam_winter_'+timestamp+'.nc'
+        return result 
+
     def read_prec(self, grid, i_t):
-        previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
+        # previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
         current_precac = self.load_var(grid, 'pracc', i_t)
-        prec = current_precac - previous_precac
-        del previous_precac
+        prec = current_precac #- previous_precac
+        # del previous_precac
         del current_precac
         gc.collect()
         return prec
+    
+    def read_seg(self, grid, i_t):
+        path_seg_mask = self.settings["DIR_STORM_TRACK"] ## There is the differences
+        time = self.get_winter_2_datetime_from_i_t(i_t)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=xr.SerializationWarning)
+            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').cloud_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
+        return img_toocan

@@ -59,14 +59,14 @@ new_var: ## These list and dict must be sorted by dependency
 
   dependencies:
     {
-      "Prec" : ["pracc", "pracc-1"], 
+      "Prec" : ["pracc"], 
       "MCS_label" : []
     }
     
   functions:
     {
       "Prec" : "read_prec",
-      "MCS_label" : "load_seg"
+      "MCS_label" : "read_seg"
     }
 
 skip_prec_i_t : 
