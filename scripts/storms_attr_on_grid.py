@@ -28,7 +28,8 @@ gr = grid.Grid(cs, fast = True, overwrite = False, verbose_steps = True, verbose
 st = storm_tracker.StormTracker(gr, overwrite_storms = False) #overwrite_storms = True takes 200G of memory, overwrite = True is super long so job-only
 jd = joint_distrib.JointDistribution(gr, storm_tracker=st, var_id_1 = "mean_unweighted_Prec", var_id_2 = "mean_Prec_cond_50", nd=5, overwrite = False)
 
-for var_name in st.ds_storms.data_vars: ## here we simply do all, but later we could select the ones not already in ds MCS_label
-    if st.ds_storms[var_name].dims == ('label',) and var_name != "vavg":
+# for var_name in st.ds_storms.data_vars: ## here we simply do all, but later we could select the ones not already in ds MCS_label
+for var_name in ['vavg', 'duration']:
+    if st.ds_storms[var_name].dims == ('label',) : #and var_name != "vavg"
         jd.add_mcs_var_from_labels(var_name)
         print(var_name, " added to MCS_label ds ! ")

@@ -24,8 +24,8 @@ gr = grid.Grid(cs, fast = True, overwrite= True, verbose_steps = False, verbose 
 
 if __name__ == '__main__':
     # gr.regrid_funcs_and_save_for_day("16-08-11", "Prec") # carefull it corrupts the file 
-    gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
-    # gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
+    # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
   
     # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
     # gr.compute_funcs_for_var_id("Conv_MCS_label", overwrite_var_id=True)

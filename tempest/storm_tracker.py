@@ -198,7 +198,7 @@ class StormTracker():
         u_i, u_e = storm.Utime_Init.values, storm.Utime_End.values
         init= max(int(u_i/1800) - 960 , 0)
         end = min(int(u_e/1800) - 960 , 959)+1
-        surf = storm.surfPix_172Wm2.values[init:end]*16
+        surf = storm.surfkm2_172Wm2.values[init:end]
         
         if len(surf) <= 4 : 
             nan_output = [np.nan for _ in range(8)]

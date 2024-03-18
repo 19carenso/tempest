@@ -169,6 +169,9 @@ def show_joint_histogram(ax,values,scale='linear',vmin=1e-3,vmax=1,cmap=None,**k
     if scale == 'linear':
         h = ax.matshow(values,vmin=vmin,vmax=vmax,origin='lower',cmap=cmap,**kwargs)
     elif scale == 'log':
+        if 'norm' in kwargs:
+            del kwargs['norm']
+
         h = ax.matshow(values,norm=LogNorm(vmin=vmin,vmax=vmax),origin='lower',cmap=cmap,**kwargs)
 
     ax.set_xticks([])

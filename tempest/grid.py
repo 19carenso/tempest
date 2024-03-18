@@ -456,20 +456,16 @@ class Grid():
         
         if var_id == "Prec" :
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
-            funcs = self.func_names+ ["cond_alpha_50"] #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
+            funcs = ["convective_20"] #+ self.func_names #+ ["cond_alpha_50"] #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
         else: 
             funcs = self.func_names
         
         ## funcs are sent at the level where data is loaded, so must check cleanly which are required
         funcs_to_compute = []
         for func_name in funcs: # for now func_names is the same for all var_id, but it should be updated in a json to be in the same fashion that days_i_t_per_var_id
-            key = '%s_%s'%(func_name,var_id)
+            key = f"{func_name}_{var_id}"
             if key in keys_loaded and not overwrite_var_id: 
                 if not overwrite_var_id : print('%s already computed, skipping...'%key)
-                # Here it should actually make another check that'd look at the days asked for computation in ditvi and compare to the one stored. 
-                # making a temp ditvi with only missing days to compute for this var would then be great
-                # Would required a to_complete bool tp then adapt the saving of computed days
-                continue
             else :
                 if overwrite_var_id : print(f"compute {keys_loaded} again because of overwrite parameter")
                 funcs_to_compute.append(func_name) 
@@ -485,8 +481,10 @@ class Grid():
                     keys+= ["Alpha_1mm_per_h", "Sigma_1mm_per_h"]
                 if "convective" == func_name:
                     keys+= ["Alpha_99_99_native", "Sigma_99_99_native"]
+                if "convective" in func_name :
+                    keys+=["Alpha_"+key, "Sigma_"+key]
                 if "cond_alpha" in func_name:
-                    keys+=["mean_unweighted_"+var_id, "Sigma_"+key, "Treshold_"+key, "Sigma_intra_day_"+key]
+                    keys+=["mean_unweighted_"+var_id, "Sigma_"+key, "threshold_"+key, "Sigma_intra_day_"+key]
         
         # Overide - If var_id is MCS (or maybe later contains MCS) - the funcs and keys to only compute the MCS_label
         if var_id == "MCS_label" or var_id == "MCS_label_Tb_Feng" : 
@@ -505,6 +503,8 @@ class Grid():
                 if func is not None: #MCS overide issue
                     if "cond_alpha" in func: 
                         da_days_funcs += [[], [], [], []]
+                    elif "convective" in func:
+                        da_days_funcs += [[], []]
                     elif "supra" == func or "ultra" == func or "wet" == func or "convective"==func or "heavy" == func:
                         da_days_funcs += [[], []]
             
@@ -585,46 +585,37 @@ class Grid():
 
         """
         temp_funcs_to_compute  = copy.deepcopy(funcs_to_compute)
-        if 'heavy' in temp_funcs_to_compute :
-            heavy_bool = True 
-            temp_funcs_to_compute.remove('heavy')
-        else : 
-            heavy_bool = False
+        keywords = ['heavy', 'supra', 'ultra', 'wet', 'convective']
+        bools = {keyword: False for keyword in keywords}  # Initialize all bools to False
 
-        if 'supra' in temp_funcs_to_compute :
-            supra_bool = True
-            temp_funcs_to_compute.remove('supra')
-        else:
-            supra_bool = False
+        for keyword in keywords:
+            if keyword in temp_funcs_to_compute:
+                bools[keyword] = True
+                temp_funcs_to_compute.remove(keyword)
 
-        if 'ultra' in temp_funcs_to_compute:
-            ultra_bool = True
-            temp_funcs_to_compute.remove('ultra') 
-        else:
-             ultra_bool = False
+        heavy_bool = bools['heavy']
+        supra_bool = bools['supra']
+        ultra_bool = bools['ultra']
+        wet_bool = bools['wet']
+        convective_bool = bools['convective']
         
-        if 'wet' in temp_funcs_to_compute:
-            wet_bool = True
-            temp_funcs_to_compute.remove('wet') 
-        else:
-             wet_bool = False
-
-        if 'convective' in temp_funcs_to_compute:
-            convective_bool = True
-            temp_funcs_to_compute.remove('convective') 
-        else:
-             convective_bool = False
-        
-        treshold_alpha = np.nan
+        threshold_alpha = np.nan
+        threshold_convective = np.nan
         for temp_func in temp_funcs_to_compute:
             if temp_func is not None: #same MCS overide problem
                 if "cond_alpha" in temp_func:
-                    treshold_alpha = float("0." + temp_func[-2:]) ## make it work as a list if you want for now, lets stay flex
+                    threshold_alpha = float("0." + temp_func[-2:]) ## make it work as a list if you want for now, lets stay flex
                     alpha_cond_bool = True
                     temp_funcs_to_compute.remove(temp_func)
-                
-        if np.isnan(treshold_alpha) : alpha_cond_bool = False
-                
+                    
+                elif "convective" in temp_func:
+                    threshold_convective = float(temp_func[-2:])
+                    convective_cond_bool = True
+                    temp_funcs_to_compute.remove(temp_func)
+                    
+        if np.isnan(threshold_alpha) : alpha_cond_bool = False
+        if np.isnan(threshold_convective) : convective_cond_bool = False
+         
         def regrid_single_time_step(i_t, var_id, temp_funcs_to_compute):
             """
             Regrid data for a single time step.
@@ -703,7 +694,7 @@ class Grid():
             del day_for_func
             gc.collect()
 
-        if heavy_bool or supra_bool or ultra_bool or wet_bool or convective_bool or alpha_cond_bool:
+        if heavy_bool or supra_bool or ultra_bool or wet_bool or convective_bool or alpha_cond_bool or convective_cond_bool:
             print("loading whole day data for day", day, "for alpha_cond")
             # Prec can have this new special function that requires the whole day to be loaded as we're doing qunatile selection over the day 
             # so we need to make the distributions of these rains. 
@@ -714,6 +705,7 @@ class Grid():
             i_t_for_day = self.casestudy.days_i_t_per_var_id[var_id][day]
             i_t_within_day = np.array(i_t_for_day)%48
             for i_t in i_t_for_day:
+                ## In this circonstances this is twice as long as it should be
                 var_day.append(self.casestudy.handler.load_var(self, var_id, i_t))
             var_day = xr.concat(var_day, dim='time') ## could add coord i_t here but im too dumb with dataArrays coords
             day_per_diag = []
@@ -732,11 +724,15 @@ class Grid():
                 day_per_diag += self.get_tail_data_from_center_to_global(var_day, 1, False)
             if convective_bool : 
                 print("compute convective for day", day)
-                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 32.19467629011342, False)    
+                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 10, False)   # 32.19467629011342
 
             if alpha_cond_bool:
-                print("compute alpha_cond for treshold ", treshold_alpha)
-                day_per_diag += self.get_cumsum_data_from_center_to_global(var_day, i_t_within_day, treshold_alpha)
+                print("compute alpha_cond for threshold ", threshold_alpha)
+                day_per_diag += self.get_cumsum_data_from_center_to_global(var_day, i_t_within_day, threshold_alpha)
+                
+            if convective_cond_bool:
+                print("compute convective_cond for threshold ", threshold_convective)
+                day_per_diag += self.get_tail_data_from_center_to_global(var_day, threshold_convective, False)
                 
             if 'day_per_func' in locals() or 'day_per_func' in globals():
                 day_per_func += day_per_diag
@@ -808,7 +804,7 @@ class Grid():
                 X_rel_surface[i,j,:n_labs] = unique_counts/surf
         return X, X_rel_surface
     
-    def get_tail_data_from_center_to_global(self, data_on_center, treshold, is_relative):
+    def get_tail_data_from_center_to_global(self, data_on_center, threshold, is_relative):
         x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values #1st axis becomes time
         mean_check = np.full((self.n_lat, self.n_lon), np.nan)
         Alpha = np.full((self.n_lat, self.n_lon), np.nan)
@@ -818,7 +814,7 @@ class Grid():
             if i%10==0 : print(i, end='..')
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
                 x_subset = np.sort(x[:, slice_i_lat, slice_j_lon].flatten()) 
-                perc = np.percentile(x_subset, treshold) if is_relative else treshold
+                perc = np.percentile(x_subset, threshold) if is_relative else threshold
                 mean = np.mean(x_subset)
                 rcond = np.mean(x_subset[x_subset>perc])
                 sigma = np.sum(x_subset>perc)/len(x_subset)
@@ -829,7 +825,7 @@ class Grid():
                 Sigma[i,j] = sigma
                 Rcond[i,j] = rcond
 
-        if treshold == 95 : 
+        if threshold == 95 : 
             output = [np.expand_dims(Rcond, axis =-1), # Is called heavy_Prec afterward because of how key works
                     np.expand_dims(Alpha, axis = -1), 
                     np.expand_dims(Sigma, axis =-1),
@@ -842,7 +838,7 @@ class Grid():
         # expand so that we can concatenate futur dataarrays along day dim
         return output
 
-    def get_cumsum_data_from_center_to_global(self, data_on_center, i_t_within_day, treshold = 0.5):
+    def get_cumsum_data_from_center_to_global(self, data_on_center, i_t_within_day, threshold = 0.5):
         x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values #1st axis becomes time
         mean_check = np.full((self.n_lat, self.n_lon), np.nan)
         sigma_global = np.full((self.n_lat, self.n_lon), np.nan)
@@ -866,7 +862,7 @@ class Grid():
                     
                 else : 
                     x_clean = x_subset_cumsum/total_prec
-                    idx_rcond = np.where(x_clean > treshold)[0] # dynamically catch treshold from var_name.
+                    idx_rcond = np.where(x_clean > threshold)[0] # dynamically catch threshold from var_name.
                     rcond = np.mean(x_subset[idx_rcond])
                     sigma = len(x_subset[idx_rcond])/len(x_subset)
                     pcond = x_subset[idx_rcond[0]] # the precip value at which precips start to be acounted in Rcond
@@ -932,13 +928,13 @@ class Grid():
     def get_cond_prec_on_native_for_i_t(self, i_t):
         file = self.get_var_ds_file("Prec")
         with xr.open_dataset(file) as prec:
-            treshold_prec = prec.Treshold_cond_alpha_50_Prec.values
+            threshold_prec = prec.threshold_cond_alpha_50_Prec.values
             native_lon = self.slices_j_lon[-1][-1].stop+1
             native_lat = self.slices_i_lat[-1].stop+1
             out = np.zeros((native_lat, native_lon), float)
             i_day = self.casestudy.get_i_day_from_i_t(i_t)
             for i, slice_i_lat in enumerate(self.slices_i_lat):
                 for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
-                    value_to_expand = treshold_prec[i,j, i_day]
+                    value_to_expand = threshold_prec[i,j, i_day]
                     out[slice_i_lat, slice_j_lon] = value_to_expand
         return out

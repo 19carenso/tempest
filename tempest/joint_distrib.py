@@ -727,7 +727,7 @@ class JointDistribution():
         # return this fraction
         return bin_fraction_mcs, bin_noise, bin_counts
 
-    def plot_data(self, data, data_noise = None, scale = 'linear', cmap = plt.cm.RdBu_r, branch = False, label = '', fig =None ,ax = None, vbds = (None, None), cb_bool = True):
+    def plot_data(self, data, data_noise = None, scale = 'linear', cmap = plt.cm.RdBu_r, norm = None, branch = False, label = '', fig =None ,ax = None, vbds = (None, None), cb_bool = True):
         """
         TODO : mask data, keep bins
         """
@@ -752,10 +752,10 @@ class JointDistribution():
         # ax.set_title(title)
 
         # -- Density
-        pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
+        pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, norm = norm)
         if data_noise is not None :
             Z_noise = data_noise.T
-            show_joint_histogram(ax_show, Z_noise, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, alpha=0.1)
+            show_joint_histogram(ax_show, Z_noise, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, norm=norm, alpha=0.1)
 
         # -- Colorbar
         if cb_bool : 
@@ -874,7 +874,7 @@ class JointDistribution():
 
         return out_ij
     
-    def process_plot_var_cond_reducing_prec(self, var_id, var_cond_list, mask = True, func = "mean"):
+    def process_plot_var_cond_reducing_prec(self, var_id, var_cond_list, mask = True, func = "mean", norm = None):
         key = func+'_'+var_id
 
         if func == 'MCS':
@@ -913,10 +913,10 @@ class JointDistribution():
         
         ax_jd = axs[0, 1]
         bincount_reduced_prec, _, _ = np.histogram2d(x = reduced_prec[self.var_id_1].values.flatten(), y = reduced_prec[self.var_id_2].values.flatten(), bins = (self.bins1, self.bins2), density = False)
-        self.plot_data(bincount_reduced_prec, scale = 'log', label = "Reduced Prec", cmap=plt.cm.magma_r , fig = fig, ax = ax_jd)
+        self.plot_data(bincount_reduced_prec, scale = 'log', label = "Reduced Prec", cmap=plt.cm.magma_r, norm=norm, fig = fig, ax = ax_jd)
         
         for bincount, ax, label in zip(bincount_where_var_cond, axs.flatten()[2:], labels):
-            self.plot_data(bincount/bincount_reduced_prec, scale = 'linear',  cmap=plt.cm.magma_r, vbds = (0, 1), fig = fig, ax = ax, label = label)
+            self.plot_data(bincount/bincount_reduced_prec, scale = 'linear',  cmap=plt.cm.magma_r, norm=norm, vbds = (0, 1), fig = fig, ax = ax, label = label)
         
         return bincount_where_var_cond, bincount_reduced_prec
      
@@ -940,7 +940,7 @@ class JointDistribution():
 
         return data_over_density
      
-    def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, plot_func = np.nanmean, vbds = (None, None), fig = None, ax = None):
+    def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, norm = None, plot_func = np.nanmean, vbds = (None, None), fig = None, ax = None):
         key = func+'_'+var_id
             # Trying to avoid the prec bug, maybe it's due to prec dataset already being open within jd
         if var_id == "Prec" : 
@@ -956,10 +956,10 @@ class JointDistribution():
         
         if fig is None : 
             fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4.71))
-        ax, cb = self.plot_data(var_over_density, data_noise = None, cmap = cmap, branch=False, vbds = vbds, fig = fig, ax = ax, label = key)
+        ax, cb = self.plot_data(var_over_density, data_noise = None, cmap = cmap, norm = norm, branch=False, vbds = vbds, fig = fig, ax = ax, label = key)
         return ax, cb
         
-    def add_mcs_var_from_labels(self, var_id, norm_rel_surf = 'lin'):
+    def add_mcs_var_from_labels(self, var_id, norm_rel_surf = 'lin', compat = 'overide'):
         """
         Not the same var_id than usual
         """
@@ -1000,7 +1000,7 @@ class JointDistribution():
                                             "lon_global": ds_mcs.lon_global,
                                             "days": ds_mcs.days})
             
-            ds_mcs = xr.merge([ds_mcs, da_var.rename(var_id)])
+            ds_mcs = xr.merge([ds_mcs, da_var.rename(var_id)], compat = compat)
             
             file_mcs_ds = self.grid.get_var_ds_file(self.st_label_var_id)
             os.remove(file_mcs_ds)
