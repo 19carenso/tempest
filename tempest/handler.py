@@ -69,11 +69,15 @@ class Handler():
                     # old # var = xr.open_dataset(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0, z=z) #, chunks = chunks)
                     var = xr.open_dataset(temp_file)
 
-            elif 'DYAMOND_II_Winter_SAM' in self.settings["MODEL"]:
+            elif 'DYAMOND_II_Winter_SAM' in self.settings["MODEL"] or self.settings["MODEL"]=='SAM_lowRes':
                 filename_var = self.get_dyamond_2_filename_from_i_t(i_t)
                 filepath_var = os.path.join(path_data_in, filename_var)
                 var = xr.open_dataset(filepath_var)[var_id][0].load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice) #lon is useless but lat important because otherwise its -60 60
-
+            
+            elif self.settings["MODEL"] == "OBS_lowRes":
+                filename_var  = self.get_mcsmip_dyamond_obs_filename_from_i_t(i_t)
+                filepath_var = os.path.join(path_data_in, filename_var)
+                var = xr.open_dataset(filepath_var)[var_id][0].load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice) #lon is useless but lat important because otherwise its -60 60
             return var
          
     def load_seg(self, grid, i_t):
@@ -358,12 +362,28 @@ class Handler():
     def get_dyamond_2_filename_from_i_t(self, i_t):
         new_date = self.get_winter_2_datetime_from_i_t(i_t)
         timestamp = new_date.strftime("%Y%m%d%H")
-        result = 'pr_rlut_sam_winter_'+timestamp+'.nc'
+        
+        if self.settings["MODEL"] == "DYAMOND_II_Winter_SAM":
+            season_path = 'pr_rlut_sam_winter_' 
+        elif self.settings["MODEL"] == "SAM_lowRes":
+            season_path = 'pr_rlut_sam_summer_'
+        
+
+        result = season_path+timestamp+'.nc'
         return result 
 
     def read_prec(self, grid, i_t):
         # previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
         current_precac = self.load_var(grid, 'pracc', i_t)
+        prec = current_precac #- previous_precac
+        # del previous_precac
+        del current_precac
+        gc.collect()
+        return prec
+
+    def diff_precac(self, grid, i_t):
+        # previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
+        current_precac = self.load_var(grid, 'Precac', i_t)
         prec = current_precac #- previous_precac
         # del previous_precac
         del current_precac
@@ -376,4 +396,50 @@ class Handler():
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
             img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').cloud_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
+        return img_toocan
+    
+    def read_seg_feng(self, grid, i_t):
+        path_seg_mask = self.settings["DIR_STORM_TRACK"] ## There is the differences
+        time = self.get_winter_2_datetime_from_i_t(i_t)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=xr.SerializationWarning)
+            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').mcs_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
+        return img_toocan
+    
+###### This is for OBS of MCSMIP 
+    def get_mcsmip_dyamond_obs_datetime_from_i_t(self, i_t):
+        date_ref = dt.datetime(year=self.dict_date_ref["year"], month=self.dict_date_ref["month"], day=self.dict_date_ref["day"])
+        delta = dt.timedelta(seconds=i_t*3600)
+        datetime = delta+date_ref
+        return datetime    
+    
+    def get_mcsmip_dyamond_obs_filename_from_i_t(self, i_t):
+        new_date = self.get_mcsmip_dyamond_obs_datetime_from_i_t(i_t)
+        timestamp = new_date.strftime("%Y%m%d%H")
+        result = 'merg_'+timestamp+"_4km-pixel.nc"
+        return result
+
+    def obs_prec(self, grid, i_t):
+        # previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
+        current_precac = self.load_var(grid, 'precipitationCal', i_t)
+        prec = current_precac #- previous_precac
+        # del previous_precac
+        del current_precac
+        gc.collect()
+        return prec
+    
+    def obs_seg(self, grid, i_t):
+        path_seg_mask = self.settings["DIR_STORM_TRACK"] 
+        time = self.get_mcsmip_dyamond_obs_datetime_from_i_t(i_t)## There is the differences
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=xr.SerializationWarning)
+            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').cloud_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
+        return img_toocan
+    
+    def obs_seg_feng(self, grid, i_t):
+        path_seg_mask = self.settings["DIR_STORM_TRACK"] 
+        time = self.get_mcsmip_dyamond_obs_datetime_from_i_t(i_t)## There is the differences
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=xr.SerializationWarning)
+            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').mcs_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
         return img_toocan

@@ -5,6 +5,7 @@ import sys
 import pickle
 import time
 import xarray as xr 
+import seaborn as sns
 
 from skimage import measure # pylance: disable=import-error 
 from scipy.optimize import curve_fit
@@ -884,8 +885,6 @@ class JointDistribution():
             da_var = self.prec.sortby("days")[key]
         else :  
             da_var = self.grid.get_var_id_ds(var_id).sortby("days")[key]
-        
-        
             
         var_days = list(da_var.days.values)
         if isinstance(mask, np.ndarray):
@@ -912,7 +911,7 @@ class JointDistribution():
         simple_hist(var, f"{key}", bars= var_cond_list, fig = fig, ax = ax_hist) #label = f"Simple hist of {var_id}"
         
         ax_jd = axs[0, 1]
-        bincount_reduced_prec, _, _ = np.histogram2d(x = reduced_prec[self.var_id_1].values.flatten(), y = reduced_prec[self.var_id_2].values.flatten(), bins = (self.bins1, self.bins2), density = False)
+        bincount_reduced_prec, _, _ = np.histogram2d(x = reduced_prec[self.var_id_1].where(mask).values.flatten(), y = reduced_prec[self.var_id_2].values.flatten(), bins = (self.bins1, self.bins2), density = False)
         self.plot_data(bincount_reduced_prec, scale = 'log', label = "Reduced Prec", cmap=plt.cm.magma_r, norm=norm, fig = fig, ax = ax_jd)
         
         for bincount, ax, label in zip(bincount_where_var_cond, axs.flatten()[2:], labels):
@@ -963,52 +962,132 @@ class JointDistribution():
         """
         Not the same var_id than usual
         """
-        with self.grid.get_var_id_ds(self.st_label_var_id).sortby("days") as ds_mcs:
-            
-            ds_var_by_label = xr.open_dataset(self.file_storms)[var_id] 
-            arr = np.full(np.shape(ds_mcs[self.st_label_var_id])[:-1], np.nan)
-            # Messy stuff bc MCS in here
-            for i_lat ,lat in enumerate(ds_mcs.lat_global):
-                for i_lon, lon in enumerate(ds_mcs.lon_global):
-                    for i_day, day in enumerate(ds_mcs.days):
-                        sub_ds = ds_mcs.sel(days = day, lat_global = lat, lon_global = lon)
-                        labels = sub_ds[self.st_label_var_id].values
-                        rel_surfaces = sub_ds["Rel_surface"].values
-                        valid_labels = labels[~np.isnan(labels)].astype('int')
-                        if len(valid_labels)>0:
-                            labels = valid_labels[np.isin(valid_labels, ds_var_by_label.label)]
-                            rel_surfaces = rel_surfaces[:len(valid_labels)][np.isin(valid_labels, ds_var_by_label.label)]
-                            if len(labels)>0:
-                                var_values = ds_var_by_label.loc[dict(label=labels)].values          
-                                rel_surfaces = rel_surfaces[:len(labels)] ##this filter here should be pointless...
-                                if norm_rel_surf == 'lin' : 
-                                    adjustment = np.sum(rel_surfaces)
-                                    rel_surfaces = rel_surfaces / adjustment # so that it sums up to 1 
-                                if norm_rel_surf == 'fro' :
-                                    frob = np.linalg.norm(rel_surfaces)
-                                    rel_surfaces = rel_surfaces / frob
+        ds_mcs = self.grid.get_var_id_ds(self.st_label_var_id).sortby("days")
+        
+        ds_var_by_label = xr.open_dataset(self.file_storms)[var_id] 
+        arr = np.full(np.shape(ds_mcs[self.st_label_var_id])[:-1], np.nan)
+        # Messy stuff bc MCS in here
+        for i_lat ,lat in enumerate(ds_mcs.lat_global):
+            for i_lon, lon in enumerate(ds_mcs.lon_global):
+                for i_day, day in enumerate(ds_mcs.days):
+                    sub_ds = ds_mcs.sel(days = day, lat_global = lat, lon_global = lon)
+                    labels = sub_ds[self.st_label_var_id].values
+                    rel_surfaces = sub_ds["Rel_surface"].values
+                    valid_labels = labels[~np.isnan(labels)].astype('int')
+                    if len(valid_labels)>0:
+                        labels = valid_labels[np.isin(valid_labels, ds_var_by_label.label)]
+                        rel_surfaces = rel_surfaces[:len(valid_labels)][np.isin(valid_labels, ds_var_by_label.label)]
+                        if len(labels)>0:
+                            var_values = ds_var_by_label.loc[dict(label=labels)].values          
+                            rel_surfaces = rel_surfaces[:len(labels)] ##this filter here should be pointless...
+                            if norm_rel_surf == 'lin' : 
+                                adjustment = np.sum(rel_surfaces)
+                                rel_surfaces = rel_surfaces / adjustment # so that it sums up to 1 
+                            if norm_rel_surf == 'fro' :
+                                frob = np.linalg.norm(rel_surfaces)
+                                rel_surfaces = rel_surfaces / frob
+                            out = np.average(var_values, weights = rel_surfaces)
+                            if out < 0 :
+                                print(valid_labels, labels, var_values, rel_surfaces)
+                            arr[i_lat, i_lon, i_day] = np.average(var_values, weights = rel_surfaces) 
+                            
+        if norm_rel_surf == 'lin': 
+            var_id = var_id+'_surf_adj'
+        elif norm_rel_surf == 'fro':
+            var_id = var_id+'_surf_fro_adj'
 
-                                arr[i_lat, i_lon, i_day] = np.average(var_values, weights = rel_surfaces) 
-                                
-            if norm_rel_surf == 'lin': 
-                var_id = var_id+'_surf_adj'
-            elif norm_rel_surf == 'fro':
-                var_id = var_id+'_surf_fro_adj'
+        da_var = xr.DataArray(arr, dims=["lat_global", "lon_global", "days"],
+                                coords={"lat_global": ds_mcs.lat_global,
+                                        "lon_global": ds_mcs.lon_global,
+                                        "days": ds_mcs.days})
+        
 
-            da_var = xr.DataArray(arr, dims=["lat_global", "lon_global", "days"],
-                                    coords={"lat_global": ds_mcs.lat_global,
-                                            "lon_global": ds_mcs.lon_global,
-                                            "days": ds_mcs.days})
-            
-            ds_mcs = xr.merge([ds_mcs, da_var.rename(var_id)], compat = compat)
-            
-            file_mcs_ds = self.grid.get_var_ds_file(self.st_label_var_id)
-            os.remove(file_mcs_ds)
-            ds_mcs.to_netcdf(file_mcs_ds)
+        self.grid.safe_merge_and_save(ds_mcs, da_var, var_id, self.st_label_var_id, compat='no_conflicts')
+
+        return arr
 
         # def process_plot_var_cond(self, var_id, var_cond_list, mask = None, func = "mean"):
    
-   
+    def plot_var_boundaries_on_jdist(self, var_id, func, boundaries, mask, stipple_threshold = 0.33, figsize = (5.35, 4.85)):
+        ## prepare data
+        key = func+'_'+var_id
+
+        if func == 'MCS':
+            da_var = self.grid.get_var_id_ds(self.st_label_var_id).sortby("days")[var_id]
+        # Trying to avoid the prec bug, maybe it's due to prec dataset already being open within jd
+        elif var_id == "Prec" : 
+            da_var = self.prec.sortby("days")[key]
+        else :  
+            da_var = self.grid.get_var_id_ds(var_id).sortby("days")[key]
+            
+        var_days = list(da_var.days.values)
+        if isinstance(mask, np.ndarray):
+            mask  = mask[:,:,:len(var_days)] # adapt mask days length
+        da_var = da_var.where(mask)
+        var = da_var.values.ravel()
+
+        reduced_prec = self.prec.sel(days = var_days)
+
+        ## compute conditionalized data
+        bincount_where_var_cond = []
+        labels = []
+        for cond_inf, cond_sup in zip(boundaries[:-1], boundaries[1:]):
+            spatial_var_where_cond = list(np.where((da_var.values>cond_inf) & (da_var.values<=cond_sup)))
+            # print([(spatial_var_where_cond[i]) for i in range(3)])
+            sample1_where_cond = reduced_prec[self.var_id_1].where(mask).values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
+            sample2_where_cond = reduced_prec[self.var_id_2].where(mask).values[spatial_var_where_cond[0], spatial_var_where_cond[1], spatial_var_where_cond[2]] #this flattens
+            bincount_cond, _, _ = np.histogram2d(x=sample1_where_cond, y=sample2_where_cond, bins = (self.bins1, self.bins2), density = False)
+            bincount_where_var_cond.append(bincount_cond)
+            labels.append(f"{cond_inf} < {key} <= {cond_sup}")
+
+        # fetch proeminent boundaries and 2nd, then compute density difference between both 
+        null = np.full_like(bincount_where_var_cond[0], 0)
+        cond_stacked = np.stack([null]+bincount_where_var_cond)
+        cond_max = np.argmax(cond_stacked, axis=0)
+        rows, cols = np.indices(cond_max.shape)
+        temp_cond_stack = np.copy(cond_stacked)
+        temp_cond_stack[cond_max, rows, cols] = -np.inf
+        cond_max2 = np.argmax(temp_cond_stack, axis=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            cond_max_diff = (cond_stacked[cond_max, rows, cols] - cond_stacked[cond_max2, rows, cols])/np.sum(cond_stacked, axis = 0)    
+        cond_max = cond_max.astype(float)
+        cond_max[cond_max == 0] = np.nan  # Now you can assign np.nan to it
+
+        # plot and stipple
+        fig, ax  = plt.subplots(figsize = figsize)
+        cmap = sns.color_palette("icefire", as_cmap=True)
+        ax, cb = self.plot_data(cond_max, cmap = cmap, fig=fig, ax=ax)
+        cb.remove()
+
+        stipple_mask = cond_max_diff<stipple_threshold
+        x_indices, y_indices = np.where(stipple_mask)
+        x = np.linspace(0, cond_max.shape[0], cond_max.shape[0]+1 )
+        y = np.linspace(0, cond_max.shape[1], cond_max.shape[1]+1)
+        x_stipple = x[x_indices]
+        y_stipple = y[y_indices]
+        plt.scatter(x_stipple, y_stipple, color='black', s=5)
+
+        ax.set_xlabel(r"Ranks of $P$ distribution")
+        ax.set_ylabel(r"Ranks of $P_{0.5}$ distribution")
+
+        # make a fancy colorbar
+        norm = mpl.colors.BoundaryNorm(boundaries, cmap.N)
+        cax = fig.add_axes([0.95, 0.14, 0.03, 0.8])  # [left, bottom, width, height]
+        ticks_values = []
+        labels = []
+        for cond_inf, cond_sup in zip(boundaries[:-1], boundaries[1:]): 
+            labels.append(rf"[{np.round(cond_inf, 2)},{np.round(cond_sup, 2)}]")
+            ticks_values.append((cond_inf+cond_sup)/2)
+        cbar = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, ticks=ticks_values, spacing='uniform') #spacing = 'proportional'
+        cbar.set_label(var_id)
+        cbar.set_ticklabels(labels)
+
+        ax.set_title(f"{var_id}")
+        plt.tight_layout()
+        plt.show()
+
+
     #     ## TODO catch var_unit somehow for cleaner labels
     #     key = func+'_'+var_id
     #     var_ds = self.grid.get_var_id_ds(var_id)

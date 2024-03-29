@@ -41,6 +41,14 @@ class StormTracker():
         self.labels_regridded_yxtm = grid.get_var_id_ds(self.label_var_id)[self.label_var_id].values
         self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm), axis=3)
 
+        if self.settings["MODEL"]=="DYAMOND_SAM_post_20_days":
+            self.Utime_step = 1800 # 1800seconds in half hour
+            self.i_t_start = 960 # 21st day inhalf hour index
+            self.i_t_end = 1920
+        elif self.settings["MODEL"] in ["SAM_lowRes", "OBS_lowRes"]:
+            self.Utime_step = 60 # 60minutes in one hour
+            self.i_t_start =  0 #480 is 21st fday in hour index but for now no spin off considered
+            self.i_t_end = 960 ## Definition is weird, should be something dynamical on ditvi
         # get storm tracking data
         print("Loading storms...")
         self.ds_storms, self.file_storms = self.load_storms_tracking(overwrite_storms) #, self.label_storms, self.dict_i_storms_by_label
@@ -53,7 +61,7 @@ class StormTracker():
             with xr.open_dataset(self.file_storms) as ds_storms:
                 for label in ds_storms.label:
                     storm = ds_storms.sel(label = label)
-                    grw_output = self.get_storm_growth_rate(storm, r_treshold=0.85)
+                    grw_output = self.get_storm_growth_rate(storm, r_treshold=0.85, verbose = True)
                     for out, grw_var in zip(grw_output, grw_vars):
                         grw_var.append(out)
                 grw_arr_vars = [np.array(grw_var) for grw_var in grw_vars]
@@ -77,14 +85,18 @@ class StormTracker():
             if overwrite : print("Loading storms again because overwrite_storms is True")
             paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
             # For dyamond 2 there are many filetracking for other models in the dir_storm
-            sam_paths = []
+            toocan_paths = []
             for path in paths : 
-                if "SAM" in path :
-                    sam_paths.append(path)
-            storms = load_toocan(sam_paths[0])+load_toocan(sam_paths[1])
+                if "SAM" in self.settings["MODEL"]:
+                    if "SAM" in path :
+                        toocan_paths.append(path)
+                if "OBS" in self.settings["MODEL"]:
+                    if "OBS" in path :
+                        toocan_paths.append(path)
+
+            storms = load_toocan(toocan_paths[0])+load_toocan(toocan_paths[1])
             # weird bug of latmin and lonmax being inverted ! 
             filtered_storms = []
-
             for storm in storms:
                 # print(storm)
                 # Swap latmin and lonmax
@@ -92,15 +104,19 @@ class StormTracker():
                 storm.latmin = storm.lonmax
                 storm.lonmax = save_latmin
                 
-                # Check the condition based on Utime_End
-                if storm.Utime_End / 1800 >= 960:
-                    # Add the storm to the new list if the condition is met
-                    filtered_storms.append(storm)
+                if self.settings["MODEL"] == "DYAMOND_SAM_post_20_days": # I want to avoid the spin off here + I use specifi time knowledge
+                    # Check the condition based on Utime_End
+                    if storm.Utime_End / 1800 >= 960:
+                        # Add the storm to the new list if the condition is met
+                        filtered_storms.append(storm)
+
+                else : filtered_storms.append(storm)
 
             # Update the original list with the filtered storms
             storms = filtered_storms
             print("making ds storms ...")
             ## !!!!!!!!!!!!
+            print()
             print(type(storms))
             print(storms[0])
             ds_storms = self.make_ds(storms)
@@ -196,12 +212,12 @@ class StormTracker():
         Returns an ax object to plot the fit
         """
         u_i, u_e = storm.Utime_Init.values, storm.Utime_End.values
-        init= max(int(u_i/1800) - 960 , 0)
-        end = min(int(u_e/1800) - 960 , 959)+1
+        init= max(int(u_i/self.Utime_step) - self.i_t_start , 0)
+        end = min(int(u_e/self.Utime_step) - self.i_t_start , self.i_t_end - 1)+1
         surf = storm.surfkm2_172Wm2.values[init:end]
-        
+        nan_output = [np.nan for _ in range(8)]
+
         if len(surf) <= 4 : 
-            nan_output = [np.nan for _ in range(8)]
             # setattr(storm, 'growth_rate', growth_rate)
             if verbose : print("A very short-lived storm passed by here...")
             return nan_output
@@ -231,12 +247,13 @@ class StormTracker():
                 return nan_output
             
             if verbose : print(f"For storm with label {storm.label}, the growth rate computed by fitting a triangle is {growth_rate} with an r-score of {r_squared}")
-        
+
             return [growth_rate, r_squared, growth_r_squared, decay_r_squared, t0, t_max, t_f, s_max]
         
     def make_ds(self, storms):
         """
         TODO : the whole clusters part seems to only return np.nan... so not working
+        TODO : Replace 1800 and 960 by Utime_step and i_t_start, model dependent
         """
 
         attribute_names = [attr for attr in dir(storms[0]) if not callable(getattr(storms[0], attr)) and  not attr.startswith("clusters") and not attr.startswith("__")]
@@ -273,11 +290,11 @@ class StormTracker():
             Utime_min = min(Utime_min, storm.Utime_Init)
             Utime_max = max(Utime_max, storm.Utime_End)  
             
-        Utime = np.arange(Utime_min, Utime_max + 1800, 1800)  
-        time = np.arange(960, 1920, 1) #should be similar
+        Utime = np.arange(Utime_min, Utime_max + self.Utime_step, self.Utime_step)  
+        time = np.arange(self.i_t_start, self.i_t_end, 1) #should be similar
 
         n_label = len(storm_clusters["Utime"])
-        n_time = 960 # all utime values possible within timerange
+        n_time = len(time) # all utime values possible within timerange
 
         for key in storm_clusters.keys():
             # one cluster attributes is empty
@@ -285,8 +302,8 @@ class StormTracker():
                 data = np.full((n_label, n_time), np.nan)
                 for i_label, list, index_Utime in zip(np.arange(len(storm_clusters[key])), storm_clusters[key], storm_clusters["Utime"]):
                     for i, utime in enumerate(index_Utime): # peut-être relaxé pour utilise Utime_Init/1800 : Utime_End/1800
-                        idx_utime = int(utime/1800)-960 # Utime
-                        if idx_utime >= 0 and idx_utime < 960: 
+                        idx_utime = int(utime/self.Utime_step)-self.i_t_start # Utime
+                        if idx_utime >= self.i_t_start and idx_utime < self.i_t_end: 
                             data[i_label, idx_utime] = list[i] 
                             # if idx_utime == 0  : print(i_label)
                 da = xr.DataArray(data, dims = ['label', 'time'], coords = {'label' : dict_storm['label'], 'time' : time})

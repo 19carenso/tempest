@@ -5,7 +5,7 @@ import os
 import pickle
 import copy
 import gc
-
+import logging
 
 import numpy as np
 import pandas as pd
@@ -413,7 +413,8 @@ class Grid():
         return ds
 
     def get_landmask(self):
-        file = self.get_var_ds_file("LANDMASK")
+        # file = self.get_var_ds_file("LANDMASK")
+        file = "/scratchx/mcarenso/tempest/DYAMOND_SAM_post_20_days_Tropics/landmask.nc" ## try to bypass to adapt to other sim where no corresponding landmask is available
         if not os.path.exists(file):
             print("Creating Earth (rough borders)")
             #arbitratry choice here, corresponds to i_t = 960
@@ -456,7 +457,8 @@ class Grid():
         
         if var_id == "Prec" :
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
-            funcs = ["convective_20"] #+ self.func_names #+ ["cond_alpha_50"] #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
+            funcs = ["convective_01", "convective_03", "convective_06", "convective_10", "convective_15", "convective_20", "convective_30"] #["cond_alpha_25"] # #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
+            # ["cond_alpha_00", "cond_alpha_01", "cond_alpha_10","cond_alpha_20",  "cond_alpha_25", "cond_alpha_50", "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_99"] 
         else: 
             funcs = self.func_names
         
@@ -487,7 +489,7 @@ class Grid():
                     keys+=["mean_unweighted_"+var_id, "Sigma_"+key, "threshold_"+key, "Sigma_intra_day_"+key]
         
         # Overide - If var_id is MCS (or maybe later contains MCS) - the funcs and keys to only compute the MCS_label
-        if var_id == "MCS_label" or var_id == "MCS_label_Tb_Feng" : 
+        if var_id == "MCS_label" or var_id == "MCS_Feng" or var_id == "MCS_label_Tb_Feng" : 
             key = var_id
             keys = [key, "Rel_surface"]
             funcs_to_compute = [None, None] # adding None here, adds funcs to MCS regridding
@@ -584,38 +586,53 @@ class Grid():
             list: A list of regridded data for each function in funcs_to_compute, in the same order.
 
         """
-        temp_funcs_to_compute  = copy.deepcopy(funcs_to_compute)
-        keywords = ['heavy', 'supra', 'ultra', 'wet', 'convective']
-        bools = {keyword: False for keyword in keywords}  # Initialize all bools to False
+        temp_funcs_to_compute = copy.deepcopy(funcs_to_compute)        
+        threshold_alpha = []  # Initialize as an empty list
+        threshold_convective = []  # Initialize as an empty list
+        alpha_cond_bool = False
+        convective_cond_bool = False
 
-        for keyword in keywords:
-            if keyword in temp_funcs_to_compute:
-                bools[keyword] = True
-                temp_funcs_to_compute.remove(keyword)
-
-        heavy_bool = bools['heavy']
-        supra_bool = bools['supra']
-        ultra_bool = bools['ultra']
-        wet_bool = bools['wet']
-        convective_bool = bools['convective']
-        
-        threshold_alpha = np.nan
-        threshold_convective = np.nan
-        for temp_func in temp_funcs_to_compute:
-            if temp_func is not None: #same MCS overide problem
+        for temp_func in temp_funcs_to_compute[:]:  # Iterate over a copy to safely remove items
+            if temp_func is not None:  # same MCS override problem
                 if "cond_alpha" in temp_func:
-                    threshold_alpha = float("0." + temp_func[-2:]) ## make it work as a list if you want for now, lets stay flex
+                    threshold_alpha.append(float("0." + temp_func[-2:]))  # Append to list
                     alpha_cond_bool = True
                     temp_funcs_to_compute.remove(temp_func)
                     
                 elif "convective" in temp_func:
-                    threshold_convective = float(temp_func[-2:])
+                    threshold_convective.append(float(temp_func[-2:]))  # Append to list
                     convective_cond_bool = True
                     temp_funcs_to_compute.remove(temp_func)
+
+        if not threshold_alpha: alpha_cond_bool = False
+        if not threshold_convective: convective_cond_bool = False
+
+        if alpha_cond_bool or convective_cond_bool:
+            print("loading whole day data for day", day, "for alpha_cond")
+            assert var_id == 'Prec'
+            var_day = []
+            i_t_for_day = self.casestudy.days_i_t_per_var_id[var_id][day]
+            i_t_within_day = np.array(i_t_for_day) % 48
+            for i_t in i_t_for_day:
+                var_day.append(self.casestudy.handler.load_var(self, var_id, i_t))
+            var_day = xr.concat(var_day, dim='time')  # could add coord i_t here but im too dumb with dataArrays coords
+            day_per_diag = []
+            
+            if alpha_cond_bool:
+                for threshold in threshold_alpha:
+                    print("compute alpha_cond for threshold", threshold)
+                    day_per_diag += self.get_cumsum_data_from_center_to_global(var_day, i_t_within_day, threshold)
                     
-        if np.isnan(threshold_alpha) : alpha_cond_bool = False
-        if np.isnan(threshold_convective) : convective_cond_bool = False
-         
+            if convective_cond_bool:
+                for threshold in threshold_convective:
+                    print("compute convective_cond for threshold", threshold)
+                    day_per_diag += self.get_tail_data_from_center_to_global(var_day, threshold, False)
+                    
+            if 'day_per_func' in locals() or 'day_per_func' in globals():
+                day_per_func += day_per_diag
+            else: 
+                day_per_func = day_per_diag
+
         def regrid_single_time_step(i_t, var_id, temp_funcs_to_compute):
             """
             Regrid data for a single time step.
@@ -647,7 +664,7 @@ class Grid():
 
             return results
         
-        if var_id == "MCS_label" or var_id == "MCS_label_Tb_Feng" or var_id == "Conv_MCS_label":
+        if var_id == "MCS_label" or var_id == "MCS_Feng" or var_id == "MCS_label_Tb_Feng" or var_id == "Conv_MCS_label":
             ## MCS have a special treatment as they are the storm tracking inputs, they don't use regrid_single_time_step
             ## Any variable with MCS within should actually be treated differently.
             
@@ -693,51 +710,6 @@ class Grid():
             del aggregated_array
             del day_for_func
             gc.collect()
-
-        if heavy_bool or supra_bool or ultra_bool or wet_bool or convective_bool or alpha_cond_bool or convective_cond_bool:
-            print("loading whole day data for day", day, "for alpha_cond")
-            # Prec can have this new special function that requires the whole day to be loaded as we're doing qunatile selection over the day 
-            # so we need to make the distributions of these rains. 
-            # Ain't really efficient should be done right after loading precips for other funcs but this happends in regrid_single_time_step so its boring..
-            # In fact, rather than making the use of regrid single time step, mean and max should also be computed that way. 
-            assert var_id == 'Prec'
-            var_day =[]
-            i_t_for_day = self.casestudy.days_i_t_per_var_id[var_id][day]
-            i_t_within_day = np.array(i_t_for_day)%48
-            for i_t in i_t_for_day:
-                ## In this circonstances this is twice as long as it should be
-                var_day.append(self.casestudy.handler.load_var(self, var_id, i_t))
-            var_day = xr.concat(var_day, dim='time') ## could add coord i_t here but im too dumb with dataArrays coords
-            day_per_diag = []
-            
-            if heavy_bool : 
-                print("compute heavy for day", day)
-                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 95, True)
-            if supra_bool : 
-                print("compute supra for day", day)
-                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 99, True)
-            if ultra_bool : 
-                print("compute ultra for day", day)
-                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 99.9, True)
-            if wet_bool : 
-                print("compute wet for day", day)
-                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 1, False)
-            if convective_bool : 
-                print("compute convective for day", day)
-                day_per_diag += self.get_tail_data_from_center_to_global(var_day, 10, False)   # 32.19467629011342
-
-            if alpha_cond_bool:
-                print("compute alpha_cond for threshold ", threshold_alpha)
-                day_per_diag += self.get_cumsum_data_from_center_to_global(var_day, i_t_within_day, threshold_alpha)
-                
-            if convective_cond_bool:
-                print("compute convective_cond for threshold ", threshold_convective)
-                day_per_diag += self.get_tail_data_from_center_to_global(var_day, threshold_convective, False)
-                
-            if 'day_per_func' in locals() or 'day_per_func' in globals():
-                day_per_func += day_per_diag
-            else : 
-                day_per_func = day_per_diag   
 
         return day_per_func
 
@@ -852,7 +824,8 @@ class Grid():
                 x_subset = np.sort(x[:, slice_i_lat, slice_j_lon].flatten()) 
                 x_subset_cumsum  = np.cumsum(x_subset) 
                 total_prec = x_subset_cumsum[-1]
-                
+                sigma_time_array = np.zeros(shape = 48)
+
                 if total_prec == 0 : 
                     mean = 0 
                     sigma = 0
@@ -874,7 +847,7 @@ class Grid():
                         sigma_time.append(sigma_t)
                     sigma_time_array = np.array(sigma_time)
                     
-                sigma_global_time[i,j, i_t_within_day] = sigma_time_array
+                sigma_global_time[i,j, :len(sigma_time_array)] = sigma_time_array
                 mean_check[i,j] = mean
                 sigma_global[i,j] = sigma
                 rate_cond[i,j] = rcond
@@ -900,7 +873,7 @@ class Grid():
         var_ds = self.get_var_id_ds(var_id)
         da_day_per_keys = []
         for var_regridded in  var_regridded_per_funcs:
-            if var_id == 'MCS_label' or var_id == "MCS_label_Tb_Feng":  
+            if var_id == 'MCS_label' or var_id == "MCS_Feng" or var_id == "MCS_label_Tb_Feng":  
                 n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
                 da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
                                         coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
@@ -938,3 +911,49 @@ class Grid():
                     value_to_expand = threshold_prec[i,j, i_day]
                     out[slice_i_lat, slice_j_lon] = value_to_expand
         return out
+
+    def safe_merge_and_save(self, ds_mcs, da_var, var_id, st_label_var_id, compat='override'):
+        """
+        Safely merges a DataArray into a Dataset and saves the merged Dataset to a NetCDF file.
+        Includes checks for successful merge and file operations.
+
+        Parameters:
+        - ds_mcs: xarray.Dataset, the original dataset to merge into.
+        - da_var: xarray.DataArray, the data array to merge.
+        - var_id: str, the variable ID to rename `da_var` to in `ds_mcs`.
+        - grid: object, should have a method `get_var_ds_file` returning the file path for `st_label_var_id`.
+        - st_label_var_id: str, the label variable ID used to retrieve the file path from `grid`.
+        - compat: str, compatibility mode for xarray.merge. Default is 'no_conflicts'.
+
+        Returns:
+        - bool: True if the operation was successful, False otherwise.
+        """
+        try:
+            # Attempt to merge da_var into ds_mcs
+            ds_mcs = xr.merge([ds_mcs, da_var.rename(var_id)], compat=compat)
+
+            # Check if the merge was successful by comparing the merged dataset's variable with the original da_var
+            if not ds_mcs[var_id].equals(da_var):
+                logging.error("Merge failed: da_var values do not match in the merged dataset.")
+                print("Try to replace instead")
+                ds_mcs[var_id] = da_var.rename(var_id)
+
+            # Retrieve the file path
+            file_mcs_ds = self.get_var_ds_file(st_label_var_id)
+
+            # Check if the file exists before attempting to delete
+            if os.path.exists(file_mcs_ds):
+                os.remove(file_mcs_ds)
+                # print(os.path.exists(file_mcs_ds))
+            else:
+                logging.warning(f"File {file_mcs_ds} does not exist, nothing to delete.")
+
+            print(ds_mcs[var_id].equals(da_var))
+            # Save the merged dataset to the file
+            ds_mcs.to_netcdf(file_mcs_ds)
+
+        except Exception as e:
+            logging.exception(f"An error occurred during the merge and save process: {e}")
+            return False
+
+        return True

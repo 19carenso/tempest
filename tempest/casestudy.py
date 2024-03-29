@@ -62,10 +62,10 @@ class CaseStudy():
                 self.var_names_2d = self._load_var_id_in_data_in(True)
                 self.var_names_3d = self._load_var_id_in_data_in(False)
 
-            elif self.model == 'DYAMOND_II_Winter_SAM':
+            elif self.model == 'DYAMOND_II_Winter_SAM' or self.model == 'SAM_lowRes' or self.model == "OBS_lowRes":
                 self.var_names_2d = self._read_var_id_in_data_in()
                 self.var_names_3d = []
-                
+            
             self.variables_names = self.var_names_2d + self.var_names_3d                
             self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
             # quite manual
@@ -212,6 +212,9 @@ class CaseStudy():
 
         timestamp_pattern = re.compile(r'(\d{4}\d{2}\d{2}\d{2})\.nc')
 
+        if self.settings["MODEL"] == 'OBS_lowRes':
+            timestamp_pattern = re.compile(r'(\d{10})')
+                                           
         for var_id in var_names:
             for filename in sorted(files):
                 dict_date_ref = self.settings["DATE_REF"]
@@ -402,6 +405,9 @@ class CaseStudy():
         if "Conv_MCS_label" not in self.variables_names:
             self.variables_names.append("Conv_MCS_label")
 
+        if "MCS_Feng" not in self.variables_names:
+            self.variables_names.append("MCS_Feng")
+
         # let's get rid off rel_table because of duplicates issue (not quantified)
         # if vanilla :
         #     # I love SQL time
@@ -416,6 +422,7 @@ class CaseStudy():
         self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id["Prec"]
         self.days_i_t_per_var_id["MCS_label_Tb_Feng"] = self.days_i_t_per_var_id["Prec"]
         self.days_i_t_per_var_id["Conv_MCS_label"] = self.days_i_t_per_var_id["Prec"]
+        self.days_i_t_per_var_id["MCS_Feng"] = self.days_i_t_per_var_id["Prec"]
 
         return self.variables_names, self.days_i_t_per_var_id
 
