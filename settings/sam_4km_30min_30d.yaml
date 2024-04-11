@@ -3,7 +3,7 @@
 # Ideally you want one settings file per project
 
 # Basic Settings
-MODEL: 'DYAMOND_SAM_post_20_days'
+MODEL: 'SAM_4km_30min_30d'
 REGION: 'Tropics'
 
 # Inner paths 
@@ -51,9 +51,9 @@ norm_specs:
 # Regions of Analysis
 BOX: [-30, 30, 0, 360] # [lat_min, lat_max, lon_min, lon_max]
 
-TIME_RANGE: [960, 1919] # [start, end] in timestep (so rows) of dir_data_in
+TIME_RANGE: [480, 1920] # [start, end] in timestep (so rows) of dir_data_in
 NATIVE_TIMESTEP: 1800 # number of time units from simulation, in a output timestep 
-# could be computed at casestudy instance ? 
+
 # Feng avoids the 10 first day. I don't see anything weird in Precac except for the 10 first timestep
 
 # could be catched dynamically

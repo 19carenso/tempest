@@ -58,11 +58,11 @@ class CaseStudy():
             if not os.path.exists(json_path) : print(f"Creation of {json_path}")
             if overwrite : print(f"Overwriting the existing variables in {json_path}")
             self.days_i_t_per_var_id = {}
-            if self.model ==  'DYAMOND_SAM_post_20_days' or self.model == 'DYAMOND_SAM':
+            if self.model ==  'DYAMOND_SAM_post_20_days' or self.model == 'DYAMOND_SAM' or self.model == "SAM_4km_30min_30d":
                 self.var_names_2d = self._load_var_id_in_data_in(True)
                 self.var_names_3d = self._load_var_id_in_data_in(False)
 
-            elif self.model == 'DYAMOND_II_Winter_SAM' or self.model == 'SAM_lowRes' or self.model == "OBS_lowRes":
+            elif self.model == 'DYAMOND_II_Winter_SAM' or self.model == 'SAM_lowRes' or self.model == "OBS_lowRes" or self.model == "IFS_lowRes":
                 self.var_names_2d = self._read_var_id_in_data_in()
                 self.var_names_3d = []
             
@@ -408,6 +408,9 @@ class CaseStudy():
         if "MCS_Feng" not in self.variables_names:
             self.variables_names.append("MCS_Feng")
 
+        if "vDCS" not in self.variables_names:
+            self.variables_names.append("vDCS")
+
         # let's get rid off rel_table because of duplicates issue (not quantified)
         # if vanilla :
         #     # I love SQL time
@@ -423,6 +426,7 @@ class CaseStudy():
         self.days_i_t_per_var_id["MCS_label_Tb_Feng"] = self.days_i_t_per_var_id["Prec"]
         self.days_i_t_per_var_id["Conv_MCS_label"] = self.days_i_t_per_var_id["Prec"]
         self.days_i_t_per_var_id["MCS_Feng"] = self.days_i_t_per_var_id["Prec"]
+        self.days_i_t_per_var_id["vDCS"] = self.days_i_t_per_var_id["Prec"]
 
         return self.variables_names, self.days_i_t_per_var_id
 

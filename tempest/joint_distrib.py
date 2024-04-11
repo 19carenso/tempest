@@ -26,7 +26,7 @@ class JointDistribution():
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, storm_tracker = None, nd=4, var_id = "Prec", var_id_1 = "mean_Prec", var_id_2 = "max_Prec", dist_mask = True, overwrite=False, verbose = False, regionalize = False, dist_bintype = "invlogQ"):
+    def __init__(self, grid, storm_tracker = None, nd=4, nbpd = 5, var_id = "Prec", var_id_1 = "mean_Prec", var_id_2 = "max_Prec", dist_mask = True, overwrite=False, verbose = False, regionalize = False, dist_bintype = "invlogQ"):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -43,6 +43,7 @@ class JointDistribution():
         self.var_id_2 = var_id_2
         self.regionalize = regionalize
         self.nd = nd
+        self.nbpd  = nbpd
         self.dist_bintype = dist_bintype
         self.ditvi = grid.casestudy.days_i_t_per_var_id
         self.var_id = var_id
@@ -151,12 +152,12 @@ class JointDistribution():
         path_dist2 = os.path.join(self.dir_out, name_dist2)
 
         if self.overwrite:
-            self.dist1 = Distribution(name = name_dist1,  bintype = self.dist_bintype, nd = self.nd, fill_last_decade=True)
+            self.dist1 = Distribution(name = name_dist1,  bintype = self.dist_bintype, nd = self.nd, nbpd = self.nbpd, fill_last_decade=True)
             self.dist1.compute_distribution(self.sample1)
             with open(path_dist1, 'wb') as file:
                 pickle.dump(self.dist1, file)
 
-            self.dist2 = Distribution(name = name_dist2,  bintype = self.dist_bintype, nd = self.nd, fill_last_decade=True)
+            self.dist2 = Distribution(name = name_dist2,  bintype = self.dist_bintype, nd = self.nd, nbpd = self.nbpd, fill_last_decade=True)
             self.dist2.compute_distribution(self.sample2)
             with open(path_dist2, 'wb') as file:
                 pickle.dump(self.dist2, file)
@@ -694,12 +695,12 @@ class JointDistribution():
             
         return mask_all_labels
     
-    def get_mcs_bin_fraction(self, bin_noise_treshold = 4, region_mask = None):
+    def get_mcs_bin_fraction(self, bin_noise_treshold = 4, region_mask = None, mcs_cat_name=None):
         n_i, n_j = self.bincount.shape
         bin_fraction_mcs = np.full((n_i,n_j),np.nan)
         bin_noise = np.full((n_i,n_j),np.nan)
         bin_counts = np.full((n_i,n_j),np.nan)
-
+        
         for i_bin in range(n_i):
             for j_bin in range(n_j):
                 # where bin falls in x-y-t
@@ -708,7 +709,11 @@ class JointDistribution():
                     mask_bin_yxt = np.logical_and(mask_bin_yxt, region_mask)
 
                 # where bin falls in x-y-t and MCS occurs
-                mask_bin_with_mcs_yxt = np.logical_and(mask_bin_yxt, self.mask_labels_regridded_yxt)
+                if mcs_cat_name is None : 
+                    mask_bin_with_mcs_yxt = np.logical_and(mask_bin_yxt, self.mask_labels_regridded_yxt)
+                else : 
+                    #load corresponding modified labels, by their cat name in gr.get_var_id_ds("Original MCS var_id from which is built the new cat")
+                    mask_bin_with_mcs_yxt = np.logical_and(mask_bin_yxt, self.mask_labels_regridded_yxt)
                 # number of points in joint mask
                 count_bin_mcs = np.sum(mask_bin_with_mcs_yxt)
                 # number of point in bin mask

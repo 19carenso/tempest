@@ -43,7 +43,7 @@ class Handler():
             
         else : 
             path_data_in = grid.settings["DIR_DATA_2D_IN"]
-            if "DYAMOND_SAM" in self.settings["MODEL"]:
+            if self.settings["MODEL"] in ["DYAMOND_SAM", "SAM_4km_30min_30d"]:
                 root = self.get_rootname_from_i_t(i_t)
                 filename_var = root+f".{var_id}.2D.nc"
                 filepath_var = os.path.join(path_data_in, filename_var)
@@ -69,12 +69,12 @@ class Handler():
                     # old # var = xr.open_dataset(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0, z=z) #, chunks = chunks)
                     var = xr.open_dataset(temp_file)
 
-            elif 'DYAMOND_II_Winter_SAM' in self.settings["MODEL"] or self.settings["MODEL"]=='SAM_lowRes':
+            elif self.settings["MODEL"] in ["DYAMOND_II_Winter_SAM", "SAM_lowRes", "IFS_lowRes"]:
                 filename_var = self.get_dyamond_2_filename_from_i_t(i_t)
                 filepath_var = os.path.join(path_data_in, filename_var)
                 var = xr.open_dataset(filepath_var)[var_id][0].load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice) #lon is useless but lat important because otherwise its -60 60
             
-            elif self.settings["MODEL"] == "OBS_lowRes":
+            elif self.settings["MODEL"] in ["OBS_lowRes"]:
                 filename_var  = self.get_mcsmip_dyamond_obs_filename_from_i_t(i_t)
                 filepath_var = os.path.join(path_data_in, filename_var)
                 var = xr.open_dataset(filepath_var)[var_id][0].load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice) #lon is useless but lat important because otherwise its -60 60
@@ -272,9 +272,6 @@ class Handler():
         gc.collect()
         return prec
 
-    def load_prec_minus_1(self, grid, i_t):
-        return self.load_prec(grid, i_t)
-
     def compute_qv_sat(self, grid, i_t):
         pp = self.load_var(grid, "PP", i_t)
         tabs = self.load_var(grid, "TABS", i_t)
@@ -367,6 +364,8 @@ class Handler():
             season_path = 'pr_rlut_sam_winter_' 
         elif self.settings["MODEL"] == "SAM_lowRes":
             season_path = 'pr_rlut_sam_summer_'
+        elif self.settings["MODEL"] == "IFS_lowRes":
+            season_path = 'pr_rlut_ifs_summer_'
         
 
         result = season_path+timestamp+'.nc'
@@ -390,6 +389,15 @@ class Handler():
         gc.collect()
         return prec
     
+    def diff_tp(self, grid, i_t):
+        # previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
+        current_precac = self.load_var(grid, 'tp', i_t)
+        prec = current_precac #- previous_precac
+        # del previous_precac
+        del current_precac
+        gc.collect()
+        return prec
+
     def read_seg(self, grid, i_t):
         path_seg_mask = self.settings["DIR_STORM_TRACK"] ## There is the differences
         time = self.get_winter_2_datetime_from_i_t(i_t)

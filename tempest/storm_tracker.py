@@ -11,7 +11,9 @@ import pandas as pd
 import gc 
 
 import warnings
-from .load_toocan import load_toocan
+# from .toocan_loaders.load_toocan import load_toocan
+from .toocan_loaders.load_toocan_sam import load_toocan_sam
+from .toocan_loaders.load_toocan_mcsmip import load_toocan_mcsmip
 
 import warnings
 from scipy.optimize import OptimizeWarning
@@ -32,7 +34,7 @@ class StormTracker():
         self.verbose = verbose
         self.label_var_id = label_var_id
 
-        if self.label_var_id == 'MCS_label' or self.label_var_id == 'Conv_MCS_label':
+        if self.label_var_id == 'MCS_label' or self.label_var_id == 'Conv_MCS_label' or self.label_var_id  == "MCS_Feng":
             self.dir_storm = self.settings['DIR_STORM_TRACKING']
         elif self.label_var_id == 'MCS_label_Tb_Feng':
             self.dir_storm = self.settings['DIR_STORM_TRACKING_TB_FENG']
@@ -41,14 +43,14 @@ class StormTracker():
         self.labels_regridded_yxtm = grid.get_var_id_ds(self.label_var_id)[self.label_var_id].values
         self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm), axis=3)
 
-        if self.settings["MODEL"]=="DYAMOND_SAM_post_20_days":
-            self.Utime_step = 1800 # 1800seconds in half hour
-            self.i_t_start = 960 # 21st day inhalf hour index
-            self.i_t_end = 1920
-        elif self.settings["MODEL"] in ["SAM_lowRes", "OBS_lowRes"]:
-            self.Utime_step = 60 # 60minutes in one hour
-            self.i_t_start =  0 #480 is 21st fday in hour index but for now no spin off considered
-            self.i_t_end = 960 ## Definition is weird, should be something dynamical on ditvi
+        # could be built if temporal axis dimension of MCS was passsed in settings
+
+        self.Utime_step = self.settings["NATIVE_TIMESTEP"] # 60minutes in one hour
+        self.i_t_start = self.settings["TIME_RANGE"][0] # 21st day inhalf hour index
+        self.i_t_end = self.settings["TIME_RANGE"][1]
+
+        self.i_t_start = self.settings["TIME_RANGE"][0] # 21st day inhalf hour index
+        self.i_t_end = self.settings["TIME_RANGE"][1]
         # get storm tracking data
         print("Loading storms...")
         self.ds_storms, self.file_storms = self.load_storms_tracking(overwrite_storms) #, self.label_storms, self.dict_i_storms_by_label
@@ -59,15 +61,15 @@ class StormTracker():
             grw_var_names= ["growth_rate", "r_squared", "growth_r_squared", "decay_r_squared", "t0", "t_max", "t_f", "s_max"]
             grw_vars = [ [] for _ in grw_var_names]
             with xr.open_dataset(self.file_storms) as ds_storms:
-                for label in ds_storms.label:
-                    storm = ds_storms.sel(label = label)
+                for label in ds_storms.DCS_number:
+                    storm = ds_storms.sel(DCS_number = label)
                     grw_output = self.get_storm_growth_rate(storm, r_treshold=0.85, verbose = True)
                     for out, grw_var in zip(grw_output, grw_vars):
                         grw_var.append(out)
                 grw_arr_vars = [np.array(grw_var) for grw_var in grw_vars]
                 grw_data_vars = [xr.DataArray(grw_arr_var, 
-                                            dims = ['label'], 
-                                            coords = {"label": ds_storms.label})            
+                                            dims = ['DCS_number'], 
+                                            coords = {"DCS_number": ds_storms.DCS_number})            
                                                 for grw_arr_var in grw_arr_vars]
                 for grw_var_name, grw_data_var in zip(grw_var_names, grw_data_vars):
                     ds_storms[grw_var_name] = grw_data_var
@@ -90,40 +92,44 @@ class StormTracker():
                 if "SAM" in self.settings["MODEL"]:
                     if "SAM" in path :
                         toocan_paths.append(path)
+                if "IFS" in self.settings["MODEL"]:
+                    if "IFS" in path :
+                        toocan_paths.append(path)
                 if "OBS" in self.settings["MODEL"]:
                     if "OBS" in path :
                         toocan_paths.append(path)
-
-            storms = load_toocan(toocan_paths[0])+load_toocan(toocan_paths[1])
+            if self.settings["MODEL"] == "DYAMOND_SAM_post_20_days" or self.settings["MODEL"] == "SAM_4km_30min_30d":
+                storms = load_toocan_sam(toocan_paths[0])+load_toocan_sam(toocan_paths[1])
+            elif self.settings["MODEL"] in ["SAM_lowRes", "OBS_lowRes", "IFS_lowRes"]:
+                storms = load_toocan_mcsmip(toocan_paths[0])+load_toocan_mcsmip(toocan_paths[1])
             # weird bug of latmin and lonmax being inverted ! 
             filtered_storms = []
             for storm in storms:
-                # print(storm)
-                # Swap latmin and lonmax
-                save_latmin = storm.latmin
-                storm.latmin = storm.lonmax
-                storm.lonmax = save_latmin
-                
-                if self.settings["MODEL"] == "DYAMOND_SAM_post_20_days": # I want to avoid the spin off here + I use specifi time knowledge
-                    # Check the condition based on Utime_End
-                    if storm.Utime_End / 1800 >= 960:
-                        # Add the storm to the new list if the condition is met
+                # print(storm)              
+                # if self.settings["MODEL"] == "DYAMOND_SAM_post_20_days" or self.settings["MODEL"] == "SAM_4km_30min_30d" : # I want to avoid the spin off here + I use specifi time knowledge
+                    # Check the condition based on INT_UTC_timeEnd
+                if storm.INT_UTC_timeEnd / self.Utime_step >= self.i_t_start:
+                    # Add the storm to the new list if the condition is met
+                    if self.settings["MODEL"] in ["SAM_lowRes", "OBS_lowRes", "IFS_lowRes"] and self.label_var_id == "MCS_Feng":
+                        if storm.INT_classif_MCS : filtered_storms.append(storm)
+                    else : 
                         filtered_storms.append(storm)
-
-                else : filtered_storms.append(storm)
 
             # Update the original list with the filtered storms
             storms = filtered_storms
             print("making ds storms ...")
             ## !!!!!!!!!!!!
             print()
-            print(type(storms))
-            print(storms[0])
-            ds_storms = self.make_ds(storms)
+            ds_storms = self.make_ds(storms) ## this drop the duplicates
+            print("making duplicates ds storms :")
+            ds_storms_duplicate = self.make_ds(self.clean_duplicate_storms(storms))
+            print("Merging storms and cleaned duplicates")
+            ds_storms = xr.concat([ds_storms, ds_storms_duplicate], dim ="DCS_number")
+            print("Saving storms")
             ds_storms.to_netcdf(file_storms)
             del filtered_storms
             gc.collect()
-            print("ds storms saved ! ")
+            print("ds storms saved !")
 
         # label_storms = [ds_storms['label'].isel(i) for i in range(len(ds_storms['label']))]
         # dict_i_storms_by_label = {}
@@ -132,6 +138,46 @@ class StormTracker():
         #         dict_i_storms_by_label[label] = i
 
         return ds_storms, file_storms #, label_storms, dict_i_storms_by_label
+
+    def clean_duplicate_storms(self, storms):
+        l, d = [], []
+        for storm in storms:
+            l.append(storm.DCS_number)
+            d.append(storm.INT_localtime_Init)
+
+        def get_duplicates(l):
+            seen = set()
+            duplicates = set()
+            for item in l:
+                if item in seen:
+                    duplicates.add(item)
+                else:
+                    seen.add(item)
+            return list(duplicates)
+
+        ll= get_duplicates(l)
+        ss = [storm for storm in storms if storm.DCS_number in ll]
+
+        ssll = []
+        for i, l in enumerate(ll):
+            ssll.append([])
+            k=0
+            while k <2:
+                for s in ss:
+                    if s.DCS_number == l:
+                        ssll[i].append(s)
+                        k+=1
+        bool_ss= []
+        for i, ss in enumerate(ssll):
+            bool_ss.append(ss[0] == ss[1])
+
+        storms_clean = []
+        for i, storm_bool in enumerate(bool_ss):
+            if storm_bool : 
+                storms_clean.append(ssll[i][0])
+        print(f"Found {len(ssll)} duplicates, removed {sum(bool_ss)/len(bool_ss)} of them")
+
+        return storms_clean
 
     def save_storms(self, ds_storms):
         os.remove(self.file_storms)
@@ -211,10 +257,10 @@ class StormTracker():
         Given a storm object, update it's growth_rate attribute 
         Returns an ax object to plot the fit
         """
-        u_i, u_e = storm.Utime_Init.values, storm.Utime_End.values
+        u_i, u_e = storm.INT_UTC_timeInit.values, storm.INT_UTC_timeEnd.values
         init= max(int(u_i/self.Utime_step) - self.i_t_start , 0)
         end = min(int(u_e/self.Utime_step) - self.i_t_start , self.i_t_end - 1)+1
-        surf = storm.surfkm2_172Wm2.values[init:end]
+        surf = storm.LC_surfkm2_241K.values[init:end]
         nan_output = [np.nan for _ in range(8)]
 
         if len(surf) <= 4 : 
@@ -246,7 +292,7 @@ class StormTracker():
                 print("Caught Exception:", e)
                 return nan_output
             
-            if verbose : print(f"For storm with label {storm.label}, the growth rate computed by fitting a triangle is {growth_rate} with an r-score of {r_squared}")
+            if verbose : print(f"For storm with label {storm.DCS_number}, the growth rate computed by fitting a triangle is {growth_rate} with an r-score of {r_squared}")
 
             return [growth_rate, r_squared, growth_r_squared, decay_r_squared, t0, t_max, t_f, s_max]
         
@@ -270,9 +316,9 @@ class StormTracker():
 
         ## Build ds for storms attributes
         data_vars = {}
-        labels = dict_storm["label"]
+        labels = dict_storm["DCS_number"]
         for key in dict_storm.keys():
-            da = xr.DataArray(dict_storm[key], dims = ['label'], coords = {'label' : labels})
+            da = xr.DataArray(dict_storm[key], dims = ['DCS_number'], coords = {'DCS_number' : labels})
             data_vars[key] = da
             
         # ds_storms = xr.Dataset(data_vars)
@@ -287,26 +333,26 @@ class StormTracker():
                     
         Utime_min, Utime_max = 0,0
         for storm in storms : 
-            Utime_min = min(Utime_min, storm.Utime_Init)
-            Utime_max = max(Utime_max, storm.Utime_End)  
+            Utime_min = min(Utime_min, storm.INT_UTC_timeInit)
+            Utime_max = max(Utime_max, storm.INT_UTC_timeEnd)  
             
         Utime = np.arange(Utime_min, Utime_max + self.Utime_step, self.Utime_step)  
         time = np.arange(self.i_t_start, self.i_t_end, 1) #should be similar
 
-        n_label = len(storm_clusters["Utime"])
+        n_label = len(storm_clusters["LC_UTC_time"])
         n_time = len(time) # all utime values possible within timerange
 
         for key in storm_clusters.keys():
             # one cluster attributes is empty
             if len(storm_clusters[key])>0 : 
                 data = np.full((n_label, n_time), np.nan)
-                for i_label, list, index_Utime in zip(np.arange(len(storm_clusters[key])), storm_clusters[key], storm_clusters["Utime"]):
-                    for i, utime in enumerate(index_Utime): # peut-être relaxé pour utilise Utime_Init/1800 : Utime_End/1800
+                for i_label, value_list, index_Utime in zip(np.arange(len(storm_clusters[key])), storm_clusters[key], storm_clusters["LC_UTC_time"]):
+                    for i, utime in enumerate(index_Utime): # peut-être relaxé pour utilise INT_UTC_timeInit/1800 : INT_UTC_timeEnd/1800
                         idx_utime = int(utime/self.Utime_step)-self.i_t_start # Utime
-                        if idx_utime >= self.i_t_start and idx_utime < self.i_t_end: 
-                            data[i_label, idx_utime] = list[i] 
+                        if idx_utime >= 0 and idx_utime < self.i_t_end - self.i_t_start: 
+                            data[i_label, idx_utime] = value_list[i] 
                             # if idx_utime == 0  : print(i_label)
-                da = xr.DataArray(data, dims = ['label', 'time'], coords = {'label' : dict_storm['label'], 'time' : time})
+                da = xr.DataArray(data, dims = ['DCS_number', 'time'], coords = {'DCS_number' : dict_storm['DCS_number'], 'time' : time})
                     
                 # handle same name 
                 if key =="olrmin":
@@ -315,11 +361,11 @@ class StormTracker():
                     data_vars[key] = da
 
         ds = xr.Dataset(data_vars)
-        ds = ds.drop_duplicates('label', keep = False) #choix ici, attendre rep Laurent
+        ## en théorie plus besoin, si de nouveaux doublons n'aparaissent pas
+        # Sont apparus, 16k dans sam_summer
+        ds = ds.drop_duplicates('DCS_number', keep = False) #choix ici, attendre rep Laurent
 
         return ds
-
-
 
 # if plot : 
 #     # Return ax object if plotting is necessary

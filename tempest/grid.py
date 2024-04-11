@@ -457,8 +457,13 @@ class Grid():
         
         if var_id == "Prec" :
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
-            funcs = ["convective_01", "convective_03", "convective_06", "convective_10", "convective_15", "convective_20", "convective_30"] #["cond_alpha_25"] # #self.func_names + ["heavy", "supra", "ultra", "wet", "convective"]
-            # ["cond_alpha_00", "cond_alpha_01", "cond_alpha_10","cond_alpha_20",  "cond_alpha_25", "cond_alpha_50", "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_99"] 
+            # funcs = ["cond_alpha_50", "cond_alpha_85", "convective_10"]
+            funcs = ["cond_alpha_00", "cond_alpha_01", "cond_alpha_10","cond_alpha_20",  "cond_alpha_25", "cond_alpha_50", 
+                     "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_99",
+                    "convective_01", "convective_03", "convective_06", "convective_10", "convective_15", "convective_20", 
+                    "convective_30"] # #+ ["heavy", "supra", "ultra", "wet", "convective"]
+            # funcs = self.func_names
+            
         else: 
             funcs = self.func_names
         
@@ -518,6 +523,7 @@ class Grid():
                 for i_f, da_func in enumerate(da_funcs):
                     da_days_funcs[i_f].append(da_func)
                 del da_funcs
+                del da_func
                 gc.collect()
 
             for da_day, key in zip(da_days_funcs, keys) : 
@@ -549,7 +555,7 @@ class Grid():
         var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
 
         for var_regridded in  var_regridded_per_funcs:
-            if var_id == 'MCS_label' or var_id == "MCS_label_Tb_Feng" or var_id == "Conv_MCS_label":  
+            if var_id == 'MCS_label' or var_id == "MCS_Feng" or var_id == "MCS_label_Tb_Feng" or var_id == "Conv_MCS_label":  
                 n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
                 da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
                                         coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
@@ -697,9 +703,9 @@ class Grid():
             # This stacking-aggregation is dependent of funcs to compute,
             # don't forget to modify this step if you're adding a new function 
             # or to include it in the method/function... at day level then.
-            day_per_func = [[] for _ in temp_funcs_to_compute]
+            day_per_func = [[] for _ in funcs_to_compute]
 
-            for i_f, func in enumerate(temp_funcs_to_compute):
+            for i_f, func in enumerate(funcs_to_compute):
                 stacked_array = np.stack(all_i_t_for_day_per_func[i_f], axis=0)
                 aggregated_array = getattr(np, 'nan%s' % func)(stacked_array, axis=0)
                 day_for_func = np.expand_dims(aggregated_array, axis = -1)
@@ -758,7 +764,7 @@ class Grid():
         """From segmentation mask, store 1 value of each label appearing at each location in new grid.
         Input: daily-concatenated variable"""
 
-        n_MCS = 300 # new dimension size to store MCS labels
+        n_MCS = 30 # new dimension size to store MCS labels
         
         x = data_on_center
         X = np.full((self.n_lat, self.n_lon,n_MCS),np.nan)

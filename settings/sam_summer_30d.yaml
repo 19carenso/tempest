@@ -42,12 +42,13 @@ norm_specs:
 # Regions of Analysis
 BOX: [-30, 30, -180, 180] # [lat_min, lat_max, lon_min, lon_max]
 
-TIME_RANGE: [1, 960] # [start, end] in timestep (so rows) of dir_data_in
+TIME_RANGE: [240, 960] # [start, end] in timestep (so rows) of dir_data_in
+
 # Feng avoids the 10 first day. I don't see anything weird in Precac except for the 10 first timestep
 
 # could be catched dynamically
-DATE_REF: {year : 2016, month : 8, day : 01} # date of the first timestep of the data
-
+DATE_REF: {year : 2016, month : 8, day : 01} # date of the first timestep of the data files
+NATIVE_TIMESTEP: 60 # number of time units from simulation, in a output timestep 
 
 new_var: ## These list and dict must be sorted by dependency
          ## If y depends on x, x must be first in variables_id
@@ -55,21 +56,24 @@ new_var: ## These list and dict must be sorted by dependency
     [
       "Prec", 
       "MCS_label",
-      "MCS_Feng"
+      "MCS_Feng", 
+      "vDCS"
     ]
 
   dependencies:
     {
       "Prec" : ["Precac", "Precac-1"], 
       "MCS_label" : [], 
-      "MCS_Feng" : []
+      "MCS_Feng" : [],
+      "vDCS" : []
     }
     
   functions:
     {
       "Prec" : "diff_precac",
       "MCS_label" : "read_seg", 
-      "MCS_Feng" : "read_seg_feng"
+      "MCS_Feng" : "read_seg_feng", 
+      "vDCS" : "read_filter_seg"
     }
 
 skip_prec_i_t : 

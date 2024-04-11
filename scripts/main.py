@@ -7,8 +7,9 @@ from tempest import casestudy
 from tempest import grid
 from tempest import handler
 from tempest import joint_distrib
+from tempest import storm_tracker
 
-settings_path = 'settings/obs_summer.yaml'
+settings_path = 'settings/sam_summer_30d.yaml'
 
 workdir=os.getcwd()
 print(workdir)
@@ -24,14 +25,14 @@ gr = grid.Grid(cs, fast = True, overwrite= True, verbose_steps = False, verbose 
 
 if __name__ == '__main__':
     # gr.regrid_funcs_and_save_for_day("16-08-11", "Prec") # carefull it corrupts the file 
-    # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
-    gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
-
     # gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
-  
-    # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
+    st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = True, overwrite = False)
+
+    gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
+    st = storm_tracker.StormTracker(gr, label_var_id = "MCS_Feng", overwrite_storms = True, overwrite = False)
+    
     # gr.compute_funcs_for_var_id("Conv_MCS_label", overwrite_var_id=True)
 
     # jd = joint_distrib.JointDistribution(gr, nd= 5, overwrite = False, storm_tracking = True)
-    
     # jd.get_mcs_bin_fraction()   
