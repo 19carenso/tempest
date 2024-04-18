@@ -97,7 +97,6 @@ class Handler():
         img_labels = np.unique(img_toocan)[:-1]
 
         # reload storm everytime, fuck it.. dependencies might be doomed
-        print("Building Storm Tracker of MCS_label, no overwrite")
         st = storm_tracker.StormTracker(grid, label_var_id = "MCS_label", overwrite = False) # takes 2sec with all overwrite to false
 
         ds_storm = xr.open_dataset(st.file_storms)
@@ -112,13 +111,13 @@ class Handler():
             storm = ds_storm.sel(label = label)
             if storm.r_squared.values >= 0.8:
                 # retrieve time_init in ditvi format
-                time_init = storm.Utime_Init.values/1800
+                time_init = storm.Utime_Init.values/self.settings["NATIVE_TIMESTEP"]
                 # compute growth init from growth_rate t0 fit
                 growth_init = np.round(time_init + storm.t0.values, 2)
                 # compute growth end from growth_rate t_max fit
                 growth_end = np.round(time_init + storm.t_max.values, 2)
                 # End of MCS life time in ditvi format for check
-                time_end = storm.Utime_End.values/1800
+                time_end = storm.Utime_End.values/self.settings["NATIVE_TIMESTEP"]
                 # print(label, growth_init, i_t, growth_end, time_end)
                 if i_t >= growth_init and i_t <= growth_end:
                     pass
@@ -127,6 +126,26 @@ class Handler():
             else : 
                 img_toocan = img_toocan.where(img_toocan != label, np.nan)
 
+        return img_toocan
+
+
+    def load_filter_vdcs_seg(self, grid, i_t):
+        img_toocan = self.load_seg(grid, i_t)
+        img_labels = np.unique(img_toocan)[:-1] if np.any(np.isnan(img_toocan)) else np.unique(img_toocan)
+        # reload storm everytime, fuck it.. dependencies might be doomed
+        st = storm_tracker.StormTracker(grid, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False) # takes 2sec with all overwrite to false
+        dict = st.get_vdcs_dict()
+        valid_labels_per_day, _ = grid.make_labels_per_days_on_dict(dict)
+        for i_day, day in enumerate(grid.casestudy.days_i_t_per_var_id[st.label_var_id].keys()):
+            if i_t in grid.casestudy.days_i_t_per_var_id[st.label_var_id][day]:
+                current_day = day
+                current_i_day = i_day
+                break
+        today_valid_labels = valid_labels_per_day[i_day]
+        
+        for current_label in img_labels: 
+            if current_label not in today_valid_labels:
+                img_toocan = img_toocan.where(img_toocan != current_label, np.nan)
         return img_toocan
 
     def load_seg_tb_feng(self, grid, i_t):
@@ -413,7 +432,97 @@ class Handler():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
             img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').mcs_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
         return img_toocan
+
+
+    def read_filter_vdcs_seg(self, grid, i_t):
+        img_toocan = self.read_seg(grid, i_t)
+        img_labels = np.unique(img_toocan)[:-1] if np.any(np.isnan(img_toocan)) else np.unique(img_toocan)
+        print(len(img_labels))
+
+        # reload storm everytime, fuck it.. dependencies might be doomed
+        st = storm_tracker.StormTracker(grid, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False) # takes 2sec with all overwrite to false
+        dict = st.get_vdcs_dict()
+        valid_labels_per_day, _ = grid.make_labels_per_days_on_dict(dict)
+        for i_day, day in enumerate(grid.casestudy.days_i_t_per_var_id[st.label_var_id].keys()):
+            if i_t in grid.casestudy.days_i_t_per_var_id[st.label_var_id][day]:
+                current_day = day
+                current_i_day = i_day
+                break
+        print("i_day", i_day)
+        today_valid_labels = valid_labels_per_day[i_day]
+        
+        for current_label in img_labels: 
+            if current_label not in today_valid_labels:
+                img_toocan = img_toocan.where(img_toocan != current_label, np.nan)
+        return img_toocan
+
+    def read_filter_vdcs_no_mcs_seg(self, grid, i_t):
+        vdcs_mask = self.read_filter_vdcs_seg(grid, i_t)
+        mcs_mask = self.read_seg_feng(grid, i_t)
+        
+        return 0
+
+
+    def mcs_coverage_cond_prec_15(self, grid, i_t):
+        mcs_mask = self.read_seg_feng(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
     
+    def sliding_mcs_coverage_cond_prec_15(self, grid, i_t):
+        mcs_mask = self.read_seg_feng(grid, i_t)
+        previous_mcs_mask = self.read_seg_feng(grid, i_t-1)
+        sliding_mcs_mask = mcs_mask.combine_first(previous_mcs_mask)
+        del mcs_mask
+        del previous_mcs_mask
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+        sliding_mcs_mask = xr.where(prec.values > cond_prec, sliding_mcs_mask, np.nan)
+        del prec
+        del cond_prec
+        gc.collect()
+        return sliding_mcs_mask
+    
+    def vdcs_coverage_cond_prec_15(self, grid, i_t):
+        mcs_mask = self.read_filter_vdcs_seg(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
+
+    def clouds_coverage_cond_Prec_15(self, grid, i_t):
+        mcs_mask = self.read_seg(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
+
+    def sliding_clouds_coverage_cond_Prec_15(self, grid, i_t):
+        clouds_mask = self.read_seg(grid, i_t)
+        previous_clouds_mask = self.read_seg(grid, i_t-1)
+        sliding_clouds_mask = clouds_mask.combine_first(previous_clouds_mask)
+        del clouds_mask
+        del previous_clouds_mask
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+        sliding_clouds_mask = xr.where(prec.values > cond_prec, sliding_clouds_mask, np.nan)
+        del prec
+        del cond_prec
+        gc.collect()
+        return sliding_clouds_mask
+
 ###### This is for OBS of MCSMIP 
     def get_mcsmip_dyamond_obs_datetime_from_i_t(self, i_t):
         date_ref = dt.datetime(year=self.dict_date_ref["year"], month=self.dict_date_ref["month"], day=self.dict_date_ref["day"])
@@ -451,3 +560,54 @@ class Handler():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
             img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').mcs_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
         return img_toocan
+
+    def obs_filter_vdcs_seg(self, grid, i_t):
+        img_toocan = self.obs_seg(grid, i_t)
+        img_labels = np.unique(img_toocan)[:-1] if np.any(np.isnan(img_toocan)) else np.unique(img_toocan)
+        # reload storm everytime, fuck it.. dependencies might be doomed
+        st = storm_tracker.StormTracker(grid, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False) # takes 2sec with all overwrite to false
+        dict = st.get_vdcs_dict()
+        valid_labels_per_day, _ = grid.make_labels_per_days_on_dict(dict)
+        for i_day, day in enumerate(grid.casestudy.days_i_t_per_var_id[st.label_var_id].keys()):
+            if i_t in grid.casestudy.days_i_t_per_var_id[st.label_var_id][day]:
+                current_day = day
+                current_i_day = i_day
+                break
+        today_valid_labels = valid_labels_per_day[i_day]
+        
+        for current_label in img_labels: 
+            if current_label not in today_valid_labels:
+                img_toocan = img_toocan.where(img_toocan != current_label, np.nan)
+        return img_toocan
+        
+    def obs_mcs_coverage_cond_prec_15(self, grid, i_t):
+        mcs_mask = self.obs_seg_feng(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
+    
+    def obs_vdcs_coverage_cond_prec_15(self, grid, i_t):
+        mcs_mask = self.obs_filter_vdcs_seg(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
+
+    def obs_clouds_coverage_cond_Prec_15(self, grid, i_t):
+        mcs_mask = self.obs_seg(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask

@@ -44,6 +44,9 @@ class Grid():
         # Actually this should be done in CaseStudy and passed there, so that it'd be eazy to control which func for any var_id
         #### !!!!!!!!!!!!!!!!!!!!!!
         self.func_names = ['max', 'mean'] ## !!!!! usually ['max', 'mean'] especially for Prec !!!!! 
+        self.cloud_vars = ["MCS_label", "MCS_Feng", "MCS_label_Tb_Feng", "Conv_MCS_label", 
+                           "vDCS", "MCS_cond_Prec_15", "vDCS_cond_Prec_15", "clouds_cond_Prec_15", 
+                           "sliding_MCS_cond_Prec_15", "sliding_clouds_cond_Prec_15"]
         #### !!!!!!!!!!!!!!!!!!!!!!
 
         self.settings = casestudy.settings
@@ -494,14 +497,10 @@ class Grid():
                     keys+=["mean_unweighted_"+var_id, "Sigma_"+key, "threshold_"+key, "Sigma_intra_day_"+key]
         
         # Overide - If var_id is MCS (or maybe later contains MCS) - the funcs and keys to only compute the MCS_label
-        if var_id == "MCS_label" or var_id == "MCS_Feng" or var_id == "MCS_label_Tb_Feng" : 
+        if var_id in self.cloud_vars: 
             key = var_id
             keys = [key, "Rel_surface"]
             funcs_to_compute = [None, None] # adding None here, adds funcs to MCS regridding
-        elif var_id == "Conv_MCS_label":
-            key = var_id
-            keys = [key, "Conv_Rel_surface"]
-            funcs_to_compute = [None, None]
 
         if len(keys)>0 : 
             print(f"These keys : {keys} have to be computed.")
@@ -555,7 +554,7 @@ class Grid():
         var_regridded_per_funcs = self.regrid_funcs_for_day(day, var_id=var_id, funcs_to_compute=funcs)
 
         for var_regridded in  var_regridded_per_funcs:
-            if var_id == 'MCS_label' or var_id == "MCS_Feng" or var_id == "MCS_label_Tb_Feng" or var_id == "Conv_MCS_label":  
+            if var_id in self.cloud_vars:  
                 n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
                 da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
                                         coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
@@ -670,7 +669,7 @@ class Grid():
 
             return results
         
-        if var_id == "MCS_label" or var_id == "MCS_Feng" or var_id == "MCS_label_Tb_Feng" or var_id == "Conv_MCS_label":
+        if var_id in self.cloud_vars:
             ## MCS have a special treatment as they are the storm tracking inputs, they don't use regrid_single_time_step
             ## Any variable with MCS within should actually be treated differently.
             
@@ -869,7 +868,27 @@ class Grid():
     
         # expand so that we can concatenate futur dataarrays along day dim
         return output
-      
+
+    def make_labels_per_days_on_dict(self, dict):
+        mcs = self.get_var_id_ds("MCS_label")
+        mcs_labels_per_day = [np.unique(mcs.sel(days=day).MCS_label)[:-1] for day in mcs.days]
+
+        # For each day get a list of all the labels that are vDCS
+        labels_per_day = []
+        missing_labels = []
+        for labels in mcs_labels_per_day:
+            vdcs_labels_today = []
+            for label in labels : 
+                if dict.get(label, False):
+                    vdcs_labels_today.append(label)
+                elif dict.get(label, "panini") == "panini":
+                    missing_labels.append(label)
+            labels_per_day.append(vdcs_labels_today)
+
+        self.vdcs_labels_per_day = labels_per_day ## this should be generalized
+        
+        return labels_per_day, missing_labels
+        
     def regrid_funcs_and_save_for_day(self, day, var_id='Prec', funcs=['max', 'mean']):
         """
         Compute multiple functions on new grid for a given day
@@ -879,7 +898,7 @@ class Grid():
         var_ds = self.get_var_id_ds(var_id)
         da_day_per_keys = []
         for var_regridded in  var_regridded_per_funcs:
-            if var_id == 'MCS_label' or var_id == "MCS_Feng" or var_id == "MCS_label_Tb_Feng":  
+            if var_id in self.cloud_vars:  
                 n_MCS = var_regridded.shape[3] # catch correct dimension here for labels_yxtm 
                 da_day = xr.DataArray(var_regridded, dims=['lat_global', 'lon_global', 'days', 'MCS'], 
                                         coords={'lat_global': self.lat_global, 'lon_global': self.lon_global, 'days': [day], 'MCS':np.arange(n_MCS)})
@@ -904,10 +923,11 @@ class Grid():
         var_ds.to_netcdf(file)
         var_ds.close()
         
-    def get_cond_prec_on_native_for_i_t(self, i_t):
+    def get_cond_prec_on_native_for_i_t(self, i_t, alpha_threshold = 85):
         file = self.get_var_ds_file("Prec")
+        var = "threshold_cond_alpha_"+str(alpha_threshold)+"_Prec"
         with xr.open_dataset(file) as prec:
-            threshold_prec = prec.threshold_cond_alpha_50_Prec.values
+            threshold_prec = prec[var].values
             native_lon = self.slices_j_lon[-1][-1].stop+1
             native_lat = self.slices_i_lat[-1].stop+1
             out = np.zeros((native_lat, native_lon), float)

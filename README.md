@@ -68,3 +68,6 @@ Maxime Carenso & Benjamin Fildier
 ### License
 
 CNRS ? IPSL ? LEGOS ? 
+
+### Important other libraries
+xESMF which is an improvmen of ESMPY

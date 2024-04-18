@@ -55,21 +55,24 @@ new_var: ## These list and dict must be sorted by dependency
     [
       "Prec", 
       "MCS_label",
-      "MCS_Feng"
+      "MCS_Feng", 
+      "vDCS"
     ]
 
   dependencies:
     {
       "Prec" : ["tp", "tp-1"], 
       "MCS_label" : [], 
-      "MCS_Feng" : []
+      "MCS_Feng" : [], 
+      "vDCS" : []
     }
     
   functions:
     {
       "Prec" : "diff_tp",
       "MCS_label" : "read_seg", 
-      "MCS_Feng" : "read_seg_feng"
+      "MCS_Feng" : "read_seg_feng", 
+      "vDCS" : "read_filter_vdcs_seg"
     }
 
 skip_prec_i_t : 

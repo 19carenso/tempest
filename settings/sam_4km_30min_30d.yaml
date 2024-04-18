@@ -77,11 +77,12 @@ new_var: ## These list and dict must be sorted by dependency
       "OM850_cond_Prec",
       "OM850_cond_Prec_lag_1",
       "neg_OM850_cond_Prec_lag_1",
-      "Conv_MCS_label"
+      "Conv_MCS_label",
+      "vDCS"
     ]
 
   dependencies:
-    {
+    {      
       "Prec" : ["Precac", "Precac-1"], 
       "Prec_t_minus_1" : ["Precac-1", "Precac-2"],
       "MCS_label" : [],
@@ -95,7 +96,8 @@ new_var: ## These list and dict must be sorted by dependency
       "OM850_cond_Prec" : ["OM850", "Prec"],
       "OM850_cond_Prec_lag_1" : ["OM850-1", "Prec"],
       "neg_OM850_cond_Prec_lag_1" : ["OM850-1", "Prec"], 
-      "Conv_MCS_label" : []
+      "Conv_MCS_label" : [],
+      "vDCS" : [] # MCS_label actually in here
     }
     
   functions:
@@ -113,7 +115,8 @@ new_var: ## These list and dict must be sorted by dependency
       "OM850_cond_Prec" : "fetch_om850_over_cond_prec",
       "OM850_cond_Prec_lag_1" : "fetch_om850_over_cond_prec_lag_1",
       "neg_OM850_cond_Prec_lag_1" : "fetch_neg_om850_over_cond_prec_lag_1", 
-      "Conv_MCS_label" : "load_conv_seg"
+      "Conv_MCS_label" : "load_conv_seg",
+      "vDCS" : "load_filter_vdcs_seg"
     }
 
 # there should be a function to assert that. 

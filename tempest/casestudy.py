@@ -35,7 +35,6 @@ class CaseStudy():
         self.model = self.settings['MODEL']
         self.name = f"{self.model}_{self.region}"
 
-
         self.data_out = os.path.join(self.settings['DIR_DATA_OUT'], self.name)
         # Storm tracking paths in a pandas df
         # self.rel_table = self.handler.load_rel_table(self.settings['REL_TABLE'])
@@ -66,16 +65,16 @@ class CaseStudy():
                 self.var_names_2d = self._read_var_id_in_data_in()
                 self.var_names_3d = []
             
-            self.variables_names = self.var_names_2d + self.var_names_3d                
-            self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
+            self.variables_names = self.var_names_2d + self.var_names_3d
             # quite manual
             self.variables_names, self.days_i_t_per_var_id = self.add_storm_tracking_variables()
+            self.new_variables_names, self.new_var_dependencies, self.new_var_functions = self.add_new_var_id()
             
             # try to pass that within method add_new_var_id with a check for Prec as var_id or in dependency
             # doesn't handle dependency of Prec_t_minus_1 just Prec
             
-            # for var_id in self.variables_names:
-            #     self.days_i_t_per_var_id = self.skip_prec_i_t(var_id)
+            for var_id in self.variables_names:
+                self.days_i_t_per_var_id = self.skip_prec_i_t(var_id)
 
             print(f"Variables data retrieved. Saving them in {json_path}")
             self.save_var_id_as_json(self.variables_names, self.days_i_t_per_var_id, self.var_names_2d, self.var_names_3d, json_path)
@@ -125,6 +124,9 @@ class CaseStudy():
         self.lon_slice = slice(self.settings['BOX'][2], self.settings['BOX'][3])
 
     def _get_day_and_i_t(self, filename, timestamp_pattern):
+        """
+        Weird that this works with MCSMIP dates... because I don't know if file timestamps are spaced of 240 as well ?
+        """
         # starting date
         dict_date_ref = self.settings["DATE_REF"]
         date_ref = dt.datetime(year=dict_date_ref["year"], month=dict_date_ref["month"], day=dict_date_ref["day"])
@@ -289,8 +291,6 @@ class CaseStudy():
 
         dependency is a list of either directly original or new var_id, but it can also contain a +n or -n as to specify an offset in its indexes 
         e.g. :  Prec = Precac - Precac-1 ; dependencies["Prec"] = ["Precac", "Precac-1"]
-
-        ### TODO : make it work for Prec_t_minus_1 that depends on ["Precac-2", "Precac-1"] cuz for now dates doesn't work and the rest seems blurry
         """
         
         ### 
@@ -410,6 +410,9 @@ class CaseStudy():
 
         if "vDCS" not in self.variables_names:
             self.variables_names.append("vDCS")
+        
+        if "vDCS_no_MCS" not in self.variables_names:
+            self.variables_names.append("vDCS_no_MCS")
 
         # let's get rid off rel_table because of duplicates issue (not quantified)
         # if vanilla :
@@ -422,11 +425,17 @@ class CaseStudy():
         #     return self.variables_names, self.days_i_t_per_var_id
         # else :
             ## I have a feeling that joint distrib doesn't work well otherwise but to check
-        self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id["Prec"]
-        self.days_i_t_per_var_id["MCS_label_Tb_Feng"] = self.days_i_t_per_var_id["Prec"]
-        self.days_i_t_per_var_id["Conv_MCS_label"] = self.days_i_t_per_var_id["Prec"]
-        self.days_i_t_per_var_id["MCS_Feng"] = self.days_i_t_per_var_id["Prec"]
-        self.days_i_t_per_var_id["vDCS"] = self.days_i_t_per_var_id["Prec"]
+        if self.settings["MODEL"] == "OBS_lowRes":
+            var_id_fully_avail = "precipitationCal" #model dependant, check ditvi
+        elif "SAM" in self.settings["MODEL"]:
+            var_id_fully_avail = "Precac"
+            
+        self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id[var_id_fully_avail]
+        self.days_i_t_per_var_id["MCS_label_Tb_Feng"] = self.days_i_t_per_var_id[var_id_fully_avail]
+        self.days_i_t_per_var_id["Conv_MCS_label"] = self.days_i_t_per_var_id[var_id_fully_avail]
+        self.days_i_t_per_var_id["MCS_Feng"] = self.days_i_t_per_var_id[var_id_fully_avail]
+        self.days_i_t_per_var_id["vDCS"] = self.days_i_t_per_var_id[var_id_fully_avail]
+        self.days_i_t_per_var_id["vDCS_no_MCS"] = self.days_i_t_per_var_id[var_id_fully_avail]
 
         return self.variables_names, self.days_i_t_per_var_id
 

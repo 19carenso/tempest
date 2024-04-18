@@ -34,7 +34,7 @@ class StormTracker():
         self.verbose = verbose
         self.label_var_id = label_var_id
 
-        if self.label_var_id == 'MCS_label' or self.label_var_id == 'Conv_MCS_label' or self.label_var_id  == "MCS_Feng":
+        if self.label_var_id in ["MCS_label", "MCS_Feng", "Conv_MCS_label", "vDCS"]:
             self.dir_storm = self.settings['DIR_STORM_TRACKING']
         elif self.label_var_id == 'MCS_label_Tb_Feng':
             self.dir_storm = self.settings['DIR_STORM_TRACKING_TB_FENG']
@@ -112,6 +112,9 @@ class StormTracker():
                     # Add the storm to the new list if the condition is met
                     if self.settings["MODEL"] in ["SAM_lowRes", "OBS_lowRes", "IFS_lowRes"] and self.label_var_id == "MCS_Feng":
                         if storm.INT_classif_MCS : filtered_storms.append(storm)
+                    elif self.label_var_id == "vDCS":
+                        if  (storm.INT_TbMin<210) & (storm.INT_duration > 2.5) & (storm.INT_velocityAvg < 20):
+                            filtered_storms.append(storm)
                     else : 
                         filtered_storms.append(storm)
 
@@ -122,9 +125,13 @@ class StormTracker():
             print()
             ds_storms = self.make_ds(storms) ## this drop the duplicates
             print("making duplicates ds storms :")
-            ds_storms_duplicate = self.make_ds(self.clean_duplicate_storms(storms))
-            print("Merging storms and cleaned duplicates")
-            ds_storms = xr.concat([ds_storms, ds_storms_duplicate], dim ="DCS_number")
+            clean_storms = self.clean_duplicate_storms(storms)
+            if len(clean_storms)>0:
+                ds_storms_duplicate = self.make_ds(clean_storms)
+                print("Merging storms and cleaned duplicates")
+                ds_storms = xr.concat([ds_storms, ds_storms_duplicate], dim ="DCS_number")
+            else : 
+                print("All duplicates removed or no duplicates")
             print("Saving storms")
             ds_storms.to_netcdf(file_storms)
             del filtered_storms
@@ -156,6 +163,7 @@ class StormTracker():
             return list(duplicates)
 
         ll= get_duplicates(l)
+        print(f"Found {len(ll)} duplicates storms.")
         ss = [storm for storm in storms if storm.DCS_number in ll]
 
         ssll = []
@@ -169,15 +177,18 @@ class StormTracker():
                         k+=1
         bool_ss= []
         for i, ss in enumerate(ssll):
-            bool_ss.append(ss[0] == ss[1])
+            bool_ss.append(ss[0] == ss[1]) #need to add __eq__ to toocan_loader classes for this to work
+        
+        if len(bool_ss)>0 : 
+            print(f"Found {len(ssll)} duplicates, removed {np.round(1 - (sum(bool_ss)/len(bool_ss)), 2)} of them")
+            storms_clean = []
+            for i, storm_bool in enumerate(bool_ss):
+                if storm_bool : 
+                    storms_clean.append(ssll[i][0])
 
-        storms_clean = []
-        for i, storm_bool in enumerate(bool_ss):
-            if storm_bool : 
-                storms_clean.append(ssll[i][0])
-        print(f"Found {len(ssll)} duplicates, removed {sum(bool_ss)/len(bool_ss)} of them")
-
-        return storms_clean
+            return storms_clean
+        else : 
+            return []
 
     def save_storms(self, ds_storms):
         os.remove(self.file_storms)
@@ -366,7 +377,20 @@ class StormTracker():
         ds = ds.drop_duplicates('DCS_number', keep = False) #choix ici, attendre rep Laurent
 
         return ds
+        
 
+    def get_vdcs_dict(self):
+        storms = xr.open_dataset(self.file_storms)
+        ## Filter for vDCS on storms object, must be MCS_label to capture them all
+        vDCS = (storms["INT_TbMin"]<210) & (storms["INT_duration"] > 2.5) & (storms["INT_velocityAvg"] < 20)
+
+        ## make a dict that says if yes or no this label is a vDCS
+        storms["BOOL_VDC"] = vDCS
+        bool_vdc = storms.BOOL_VDC.to_pandas().to_list()
+        labels = storms.DCS_number.to_pandas().to_list()
+        bool_dict_label = dict(zip(labels, bool_vdc))
+        storms.close()
+        return bool_dict_label
 # if plot : 
 #     # Return ax object if plotting is necessary
 #     fig, ax = plt.subplots()

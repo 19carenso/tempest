@@ -57,7 +57,13 @@ new_var: ## These list and dict must be sorted by dependency
       "Prec", 
       "MCS_label",
       "MCS_Feng", 
-      "vDCS"
+      "vDCS",
+      "vDCS_no_MCS",
+      "MCS_cond_Prec_15",
+      "vDCS_cond_Prec_15", 
+      "clouds_cond_Prec_15",
+      "sliding_MCS_cond_Prec_15",
+      "sliding_clouds_cond_Prec_15"
     ]
 
   dependencies:
@@ -65,7 +71,13 @@ new_var: ## These list and dict must be sorted by dependency
       "Prec" : ["Precac", "Precac-1"], 
       "MCS_label" : [], 
       "MCS_Feng" : [],
-      "vDCS" : []
+      "vDCS" : [],
+      "vDCS_no_MCS" : [],
+      "MCS_cond_Prec_15" : ["MCS_Feng", "Prec"],
+      "vDCS_cond_Prec_15" : ["vDCS", "Prec"],
+      "clouds_cond_Prec_15" : ["MCS_label", "Prec"],
+      "sliding_MCS_cond_Prec_15" : ["MCS_Feng", "Prec"],
+      "sliding_clouds_cond_Prec_15" : ["MCS_label", "Prec"]
     }
     
   functions:
@@ -73,7 +85,13 @@ new_var: ## These list and dict must be sorted by dependency
       "Prec" : "diff_precac",
       "MCS_label" : "read_seg", 
       "MCS_Feng" : "read_seg_feng", 
-      "vDCS" : "read_filter_seg"
+      "vDCS" : "read_filter_vdcs_seg",
+      "vDCS_no_MCS" : "read_filter_vdcs_no_mcs_seg",
+      "MCS_cond_Prec_15": "mcs_coverage_cond_prec_15",
+      "vDCS_cond_Prec_15" : "vdcs_coverage_cond_prec_15",
+      "clouds_cond_Prec_15" : "clouds_coverage_cond_Prec_15",
+      "sliding_MCS_cond_Prec_15" : "sliding_mcs_coverage_cond_prec_15",
+      "sliding_clouds_cond_Prec_15" : "sliding_clouds_coverage_cond_Prec_15"
     }
 
 skip_prec_i_t : 

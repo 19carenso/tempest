@@ -56,21 +56,36 @@ new_var: ## These list and dict must be sorted by dependency
     [
       "Prec", 
       "MCS_label", 
-      "MCS_Feng"
+      "MCS_Feng", 
+      "vDCS",
+      "vDCS_no_MCS",
+      "MCS_cond_Prec_15",
+      "vDCS_cond_Prec_15", 
+      "clouds_cond_Prec_15"
     ]
 
   dependencies:
     {
       "Prec" : ["precipitationCal"], 
       "MCS_label" : [], 
-      "MCS_Feng" : []
+      "MCS_Feng" : [], 
+      "vDCS" : [],
+      "vDCS_no_MCS" : [],
+      "MCS_cond_Prec_15" : ["MCS_Feng", "Prec"],
+      "vDCS_cond_Prec_15" : ["vDCS", "Prec"],
+      "clouds_cond_Prec_15" : ["MCS_label", "Prec"]
     }
     
   functions:
     {
       "Prec" : "obs_prec",
       "MCS_label" : "obs_seg", 
-      "MCS_Feng" : "obs_seg_feng"
+      "MCS_Feng" : "obs_seg_feng", 
+      "vDCS" : "obs_filter_vdcs_seg",
+      "vDCS_no_MCS" : "obs_filter_vdcs_no_mcs_seg",
+      "MCS_cond_Prec_15": "obs_mcs_coverage_cond_prec_15",
+      "vDCS_cond_Prec_15" : "obs_vdcs_coverage_cond_prec_15",
+      "clouds_cond_Prec_15" : "obs_clouds_coverage_cond_Prec_15"
     }
 
 skip_prec_i_t : 

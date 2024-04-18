@@ -980,10 +980,10 @@ class JointDistribution():
                     rel_surfaces = sub_ds["Rel_surface"].values
                     valid_labels = labels[~np.isnan(labels)].astype('int')
                     if len(valid_labels)>0:
-                        labels = valid_labels[np.isin(valid_labels, ds_var_by_label.label)]
-                        rel_surfaces = rel_surfaces[:len(valid_labels)][np.isin(valid_labels, ds_var_by_label.label)]
+                        labels = valid_labels[np.isin(valid_labels, ds_var_by_label.DCS_number)]
+                        rel_surfaces = rel_surfaces[:len(valid_labels)][np.isin(valid_labels, ds_var_by_label.DCS_number)]
                         if len(labels)>0:
-                            var_values = ds_var_by_label.loc[dict(label=labels)].values          
+                            var_values = ds_var_by_label.loc[dict(DCS_number=labels)].values          
                             rel_surfaces = rel_surfaces[:len(labels)] ##this filter here should be pointless...
                             if norm_rel_surf == 'lin' : 
                                 adjustment = np.sum(rel_surfaces)

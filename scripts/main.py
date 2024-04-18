@@ -26,13 +26,23 @@ gr = grid.Grid(cs, fast = True, overwrite= True, verbose_steps = False, verbose 
 if __name__ == '__main__':
     # gr.regrid_funcs_and_save_for_day("16-08-11", "Prec") # carefull it corrupts the file 
     # gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
-    gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
-    st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = True, overwrite = False)
 
-    gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
-    st = storm_tracker.StormTracker(gr, label_var_id = "MCS_Feng", overwrite_storms = True, overwrite = False)
+    # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
+    # st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = True, overwrite = False)
+
+    # gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
+    # st = storm_tracker.StormTracker(gr, label_var_id = "MCS_Feng", overwrite_storms = True, overwrite = False)
     
     # gr.compute_funcs_for_var_id("Conv_MCS_label", overwrite_var_id=True)
+
+    # gr.compute_funcs_for_var_id("vDCS")
+    # st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
+
+    # gr.compute_funcs_for_var_id("MCS_cond_Prec_15")
+    # gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
+    # gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
+    gr.compute_funcs_for_var_id("sliding_clouds_cond_Prec_15")
+    # gr.compute_funcs_for_var_id("sliding_mcs_cond_Prec_15")
 
     # jd = joint_distrib.JointDistribution(gr, nd= 5, overwrite = False, storm_tracking = True)
     # jd.get_mcs_bin_fraction()   
