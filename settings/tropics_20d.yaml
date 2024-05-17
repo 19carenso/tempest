@@ -10,17 +10,17 @@ REGION: 'Tropics'
 DIR_INPUT: 'input/' 
 DIR_FIG: 'figures/' 
 DIR_OUT: 'output/'
-DIR_TEMPDATA: '/scratchx/mcarenso/tempest'
+DIR_TEMPDATA: '/homedata/mcarenso/tempest'
 
 # Where we store the data we need for the analysis, independant of model_region
-DIR_DATA_OUT: '/scratchx/mcarenso/tempest'
+DIR_DATA_OUT: '/homedata/mcarenso/tempest'
 
 # Data that are too big to be stored in your workspace
 DIR_DATA_2D_IN: '/bdd/DYAMOND/SAM-4km/OUT_2D'
 DIR_DATA_3D_IN: '/bdd/DYAMOND/SAM-4km/OUT_3D'
 
 # I don't like this one
-DIR_DATA2: '/scratchx/mcarenso/DYAMOND_REGIONS/tropics/SAM/diagnostics_2D'
+DIR_DATA2: '/homedata/mcarenso/DYAMOND_REGIONS/tropics/SAM/diagnostics_2D'
 
 # Classic TOOCAN run
 DIR_STORM_TRACK: '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/235K/TOOCAN/TOOCAN_v2.08/GLOBAL/2016/' # '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/235K/TOOCAN_EMC2/TOOCAN_v2.08/GLOBAL/2016/'

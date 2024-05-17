@@ -52,9 +52,9 @@ class StormTracker():
         self.i_t_start = self.settings["TIME_RANGE"][0] # 21st day inhalf hour index
         self.i_t_end = self.settings["TIME_RANGE"][1]
         # get storm tracking data
-        print("Loading storms...")
+        if self.verbose : print("Loading storms...")
         self.ds_storms, self.file_storms = self.load_storms_tracking(overwrite_storms) #, self.label_storms, self.dict_i_storms_by_label
-        print(f"Time elapsed for loading storms: {time.time() - start_time:.2f} seconds")
+        if self.verbose : print(f"Time elapsed for loading storms: {time.time() - start_time:.2f} seconds")
     
         ## test and incubate in a func
         if self.overwrite:
@@ -80,27 +80,27 @@ class StormTracker():
         dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
         file_storms = os.path.join(dir_out, "storms_"+self.label_var_id+".nc")
         if os.path.exists(file_storms) and not overwrite:
-            print("loading storms from netcdf")
+            if self.verbose : print("loading storms from netcdf")
             with open(file_storms, 'rb') as file:
                 ds_storms = xr.open_dataset(file)
         else : 
-            if overwrite : print("Loading storms again because overwrite_storms is True")
+            if overwrite : 
+                if self.verbose : print("Loading storms again because overwrite_storms is True")
             paths = glob.glob(os.path.join(self.dir_storm, '*.gz'))
             # For dyamond 2 there are many filetracking for other models in the dir_storm
             toocan_paths = []
             for path in paths : 
-                if "SAM" in self.settings["MODEL"]:
+                if "lowRes" in self.settings["MODEL"]:
+                    model_name = self.settings["MODEL"][:-7]
+                    if model_name in path : 
+                        toocan_paths.append(path)
+                elif "SAM" in self.settings["MODEL"]: ## this is only for sam highres now
                     if "SAM" in path :
                         toocan_paths.append(path)
-                if "IFS" in self.settings["MODEL"]:
-                    if "IFS" in path :
-                        toocan_paths.append(path)
-                if "OBS" in self.settings["MODEL"]:
-                    if "OBS" in path :
-                        toocan_paths.append(path)
+
             if self.settings["MODEL"] == "DYAMOND_SAM_post_20_days" or self.settings["MODEL"] == "SAM_4km_30min_30d":
                 storms = load_toocan_sam(toocan_paths[0])+load_toocan_sam(toocan_paths[1])
-            elif self.settings["MODEL"] in ["SAM_lowRes", "OBS_lowRes", "IFS_lowRes"]:
+            elif "lowRes" in self.settings["MODEL"]:
                 storms = load_toocan_mcsmip(toocan_paths[0])+load_toocan_mcsmip(toocan_paths[1])
             # weird bug of latmin and lonmax being inverted ! 
             filtered_storms = []

@@ -43,7 +43,7 @@ class Grid():
         # Funcs to compute on variable 
         # Actually this should be done in CaseStudy and passed there, so that it'd be eazy to control which func for any var_id
         #### !!!!!!!!!!!!!!!!!!!!!!
-        self.func_names = ['max', 'mean'] ## !!!!! usually ['max', 'mean'] especially for Prec !!!!! 
+        self.func_names = ['mean'] ## !!!!! usually ['max', 'mean'] especially for Prec !!!!! 
         self.cloud_vars = ["MCS_label", "MCS_Feng", "MCS_label_Tb_Feng", "Conv_MCS_label", 
                            "vDCS", "MCS_cond_Prec_15", "vDCS_cond_Prec_15", "clouds_cond_Prec_15", 
                            "sliding_MCS_cond_Prec_15", "sliding_clouds_cond_Prec_15"]
@@ -78,7 +78,7 @@ class Grid():
             i_lat_native_for_global = np.where((self.lat >=lat_inf) & (self.lat <= lat_sup))[0]
             i_lat_native.append(i_lat_native_for_global)
 
-        self.slices_i_lat = [slice(lat_native[0], lat_native[-1]) for lat_native in i_lat_native]
+        self.slices_i_lat = [slice(lat_native[0], lat_native[-1]+1) for lat_native in i_lat_native]
 
         i_lon_native = []
         lon_min_global, lon_max_global = self.settings["BOX"][2], self.settings["BOX"][3]
@@ -88,7 +88,7 @@ class Grid():
             i_lon_native_for_global = np.where((self.lon >= lon_inf) & (self.lon <= lon_sup))[0]
             i_lon_native.append(i_lon_native_for_global)
 
-        self.single_slice_j_lon = [slice(lon_native[0], lon_native[-1]) for lon_native in i_lon_native]
+        self.single_slice_j_lon = [slice(lon_native[0], lon_native[-1]+1) for lon_native in i_lon_native]
         self.slices_j_lon = [self.single_slice_j_lon for _ in self.slices_i_lat] #for more complex grid behaviour issues
 
         if self.verbose_steps: print("compute global pixel surface with native sum func and grid pixels")
@@ -346,7 +346,11 @@ class Grid():
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
                 if self.verbose : pass #print(slice_i_lat, slice_j_lon)
                 if self.fast : 
-                    X[i,j] = np.nansum(x[slice_i_lat, slice_j_lon]) # passed from sum to nansum 01/15/2024
+                    if len(np.shape(x==2)):
+                        X[i,j] = np.nansum(x[slice_i_lat, slice_j_lon]) # passed from sum to nansum 01/15/2024
+                    else : # assume x is 3 shape t,y,x
+                        X[i,j] = np.nansum(x[:, slice_i_lat, slice_j_lon])
+
                 else : 
                     mid_sum = np.sum(x[slice_i_lat, slice_j_lon])
                     bottom_sum = np.sum( x[self.i_min[i,j], slice_j_lon]*self.alpha_i_min[i,j])
@@ -461,12 +465,14 @@ class Grid():
         if var_id == "Prec" :
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
             # funcs = ["cond_alpha_50", "cond_alpha_85", "convective_10"]
-            funcs = ["cond_alpha_00", "cond_alpha_01", "cond_alpha_10","cond_alpha_20",  "cond_alpha_25", "cond_alpha_50", 
-                     "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_99",
-                    "convective_01", "convective_03", "convective_06", "convective_10", "convective_15", "convective_20", 
-                    "convective_30"] # #+ ["heavy", "supra", "ultra", "wet", "convective"]
-            # funcs = self.func_names
-            
+            funcs = ["cond_alpha_00", "cond_alpha_01", "cond_alpha_05", "cond_alpha_10","cond_alpha_20",  "cond_alpha_25", "cond_alpha_33", "cond_alpha_40",
+                     "cond_alpha_50", "cond_alpha_60", "cond_alpha_67", "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_99",
+                     "convective_01", "convective_02", "convective_03", "convective_04", "convective_05", "convective_06", "convective_08", "convective_10", 
+                     "convective_12", "convective_15", "convective_20","convective_25", "convective_30", "convective_40", "convective_50", "max"] 
+                     ### CAREFULL HERE, max mean (or single_timestep_regridding funcs must always be behind daily ones)
+            # old_funcs= ["heavy", "supra", "ultra", "wet", "convective"]
+        elif var_id == "vDCS_Conv_Prec" or var_id == "vDCS_Strat_Prec":
+            funcs = ["daily_weighted_mean"]
         else: 
             funcs = self.func_names
         
@@ -525,16 +531,16 @@ class Grid():
                 del da_func
                 gc.collect()
 
-            for da_day, key in zip(da_days_funcs, keys) : 
+            for da_all_days, key in zip(da_days_funcs, keys) : 
                 if self.verbose : print("concat da days before saving")
             ## concat the list of dataarrays along days dimensions
-                da_var_regrid = xr.concat(da_day, dim = 'days').sortby('days')
+                da_var_regrid = xr.concat(da_all_days, dim = 'days').sortby('days')
                 ## By doing assign we actually keep the already existing variables of the netcdf
                 ## If we were adding specific days to already existing key, we should do it an other way.
                 ## Could use the to_complete bool mentionned earlier in the function
                 var_ds = var_ds.assign(**{key: da_var_regrid})
                 
-            del da_day
+            del da_all_days
             del da_days_funcs
             del da_var_regrid
             gc.collect()
@@ -581,6 +587,10 @@ class Grid():
     def regrid_funcs_for_day(self, day, var_id='Prec', funcs_to_compute=['max', 'mean']):
         """
         Compute multiple functions on new grid for a given day and return the results as a list.
+        Simultaneously works for either : 
+        - convective+cond_alpha only funcs
+        - MCS vars func 
+        - classic functions out of previous specifications
 
         Args:
             day (str): The specific day for which regridding will be performed.
@@ -687,7 +697,32 @@ class Grid():
 
             return [labels_regrid, mcs_rel_surface] # we put it into a list so that it is the same fashion than over variables that could have multiple funcs
 
-        elif len(temp_funcs_to_compute)>0 :     
+        elif "daily_weighted_mean" in temp_funcs_to_compute:
+            print("loading whole day data for day", day, "for daily weighted mean")
+            assert var_id == 'vDCS_Conv_Prec' or var_id == "vDCS_Strat_Prec"
+            var_day = []
+            i_t_for_day = self.casestudy.days_i_t_per_var_id[var_id][day]
+
+            for i_t in i_t_for_day:
+                var_day.append(self.casestudy.handler.load_var(self, var_id, i_t))
+            print("finished loading ", day)
+            var_day = xr.concat(var_day, dim='time')
+            
+            day_per_diag = []
+            
+            day_per_diag += self.daily_spatial_mean_weighted(var_day)
+
+            if 'day_per_func' in locals() or 'day_per_func' in globals():
+                day_per_func += day_per_diag
+            else: 
+                day_per_func = day_per_diag
+
+        elif len(temp_funcs_to_compute)>0 :  
+        ## here we treat the funcs that uses regird_single_time_step. 
+        # this means the result must then be aggregated from "hourly" to daily with a native numpy operation like currently np.nanmax / np.nanmean
+        # Otherwise you'll have to load whole data
+        # The fact that this section occurs after the cond_alhpa, and convective ones means that the passed func for these operations must be behind the ones for cond and conv..
+        # Since output are not managed as a dict (because multiple diag per func/key) order must be preserved   
             # Loop over i_t, then loop over funcs_to_compute as to call regrid_single_time_step only once per i_t
             all_i_t_for_day_per_func = [[] for _ in temp_funcs_to_compute]
             for i_t in self.casestudy.days_i_t_per_var_id[var_id][day]:
@@ -702,19 +737,20 @@ class Grid():
             # This stacking-aggregation is dependent of funcs to compute,
             # don't forget to modify this step if you're adding a new function 
             # or to include it in the method/function... at day level then.
-            day_per_func = [[] for _ in funcs_to_compute]
-
-            for i_f, func in enumerate(funcs_to_compute):
+            for i_f, func in enumerate(temp_funcs_to_compute):
                 stacked_array = np.stack(all_i_t_for_day_per_func[i_f], axis=0)
                 aggregated_array = getattr(np, 'nan%s' % func)(stacked_array, axis=0)
-                day_for_func = np.expand_dims(aggregated_array, axis = -1)
-                day_per_func[i_f].append(day_for_func)
-                
-            #maybe i'm overdoing it there
-            del stacked_array
-            del aggregated_array
-            del day_for_func
-            gc.collect()
+                day_for_func = [np.expand_dims(aggregated_array, axis = -1)] # make it a list
+            
+                if 'day_per_func' in locals() or 'day_per_func' in globals():
+                    day_per_func += day_for_func
+                else: 
+                    day_per_func = day_for_func
+                #maybe i'm overdoing it there
+                del stacked_array
+                del aggregated_array
+                del day_for_func
+                gc.collect()
 
         return day_per_func
 
@@ -726,11 +762,38 @@ class Grid():
         final grid_surface. 
         """
         weights = self.pixel_surface
+        if np.shape(data_on_center)!=np.shape(weights): ## this is specifically for sst
+            weights = np.repeat(np.repeat(weights, 2, axis=0), 2, axis=1) / 4
         x = data_on_center*weights if type(data_on_center) == np.ndarray else data_on_center.values*weights
         X = self.sum_data_from_center_to_global(data_on_center = x)
         global_weights = self.grid_surface
 
-        return X/global_weights 
+        return np.expand_dims(X/global_weights , axis =-1)
+
+    def daily_spatial_mean_weighted(self, data_on_center):
+        """
+        Returns the mean of data_on_center, weighted by the relative value of the initial pixel divided by the 
+        final grid_surface. 
+        """
+        data_shape = data_on_center.shape #3rd dim can vary due to time
+        # weights = np.repeat(np.expand_dims(self.pixel_surface, axis=0), data_shape[0], axis=0)
+        x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values #*weights ; *weights
+        X = self.nanmean_data_from_center_to_global(data_on_center = x)
+        return [X] #/ self.grid_surface
+
+    def nanmean_data_from_center_to_global(self, data_on_center):
+        x = data_on_center
+        X = np.zeros((self.n_lat, self.n_lon))
+        for i, slice_i_lat in enumerate(self.slices_i_lat):
+            for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
+                if self.fast : 
+                    if len(np.shape(x))==2:
+                        X[i,j] = np.nanmean(x[slice_i_lat, slice_j_lon]) # passed from sum to nansum 01/15/2024
+                    else : # assume x is 3 shape t,y,x
+                        X[i,j] = np.nanmean(x[:, slice_i_lat, slice_j_lon])
+        del x
+        gc.collect()
+        return np.expand_dims(X, axis = 2)
 
     def spatial_max_data_from_center_to_global(self, data_on_center):
         x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values
@@ -859,7 +922,7 @@ class Grid():
                 precip_cond[i,j] = pcond
 
         output = [
-                np.expand_dims(rate_cond, axis =-1),
+                np.expand_dims(rate_cond, axis =-1), #here time must be last axis
                 np.expand_dims(mean_check, axis =-1), 
                 np.expand_dims(sigma_global, axis =-1), 
                 np.expand_dims(precip_cond, axis = -1), 
@@ -928,8 +991,8 @@ class Grid():
         var = "threshold_cond_alpha_"+str(alpha_threshold)+"_Prec"
         with xr.open_dataset(file) as prec:
             threshold_prec = prec[var].values
-            native_lon = self.slices_j_lon[-1][-1].stop+1
-            native_lat = self.slices_i_lat[-1].stop+1
+            native_lon = self.slices_j_lon[-1][-1].stop
+            native_lat = self.slices_i_lat[-1].stop
             out = np.zeros((native_lat, native_lon), float)
             i_day = self.casestudy.get_i_day_from_i_t(i_t)
             for i, slice_i_lat in enumerate(self.slices_i_lat):

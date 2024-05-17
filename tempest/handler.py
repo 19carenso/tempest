@@ -10,6 +10,7 @@ import xarray as xr
 import warnings 
 import time
 import subprocess
+import cloudmetrics
 
 from .thermo import saturation_specific_humidity
 from . import storm_tracker
@@ -48,7 +49,7 @@ class Handler():
                 filename_var = root+f".{var_id}.2D.nc"
                 filepath_var = os.path.join(path_data_in, filename_var)
                 if var_id in var_2d : 
-                    var = xr.open_dataarray(filepath_var).load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice)[0]
+                    var = xr.open_dataarray(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).load()[0]
                 elif var_id in var_3d :
                     assert z is not None
                     path_data_in = grid.settings["DIR_DATA_3D_IN"]
@@ -69,15 +70,15 @@ class Handler():
                     # old # var = xr.open_dataset(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0, z=z) #, chunks = chunks)
                     var = xr.open_dataset(temp_file)
 
-            elif self.settings["MODEL"] in ["DYAMOND_II_Winter_SAM", "SAM_lowRes", "IFS_lowRes"]:
+            elif self.settings["MODEL"] in ["DYAMOND_II_Winter_SAM", "SAM_lowRes", "IFS_lowRes", "NICAM_lowRes", "UM_lowRes", "ARPEGE_lowRes", "MPAS_lowRes", "FV3_lowRes"]:
                 filename_var = self.get_dyamond_2_filename_from_i_t(i_t)
                 filepath_var = os.path.join(path_data_in, filename_var)
-                var = xr.open_dataset(filepath_var)[var_id][0].load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice) #lon is useless but lat important because otherwise its -60 60
+                var = xr.open_dataset(filepath_var)[var_id][0].sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).load() #lon is useless but lat important because otherwise its -60 60
             
             elif self.settings["MODEL"] in ["OBS_lowRes"]:
                 filename_var  = self.get_mcsmip_dyamond_obs_filename_from_i_t(i_t)
                 filepath_var = os.path.join(path_data_in, filename_var)
-                var = xr.open_dataset(filepath_var)[var_id][0].load().sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice) #lon is useless but lat important because otherwise its -60 60
+                var = xr.open_dataset(filepath_var)[var_id][0].sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).load() #lon is useless but lat important because otherwise its -60 60
             return var
          
     def load_seg(self, grid, i_t):
@@ -127,7 +128,6 @@ class Handler():
                 img_toocan = img_toocan.where(img_toocan != label, np.nan)
 
         return img_toocan
-
 
     def load_filter_vdcs_seg(self, grid, i_t):
         img_toocan = self.load_seg(grid, i_t)
@@ -246,6 +246,11 @@ class Handler():
         df = pd.read_csv(file_path)
         df.sort_values(by='UTC', ignore_index=True,inplace=True)
         return df
+
+    def compute_iorg(self, grid, i_t):
+        mask_seg = self.load_seg(grid, i_t)
+        iorg = cloudmetrics.objects.iorg(mask_seg, periodic_domain=False)
+        return iorg
 
     ## This method is specific to your TIME_RANGE and files in DIR_DATA_IN
     def extract_digit_after_sign(self, input_string):
@@ -367,11 +372,38 @@ class Handler():
         gc.collect()
         return om850
     
+    def load_vdcs_conv_prec(self, grid, i_t):
+        print("load vdcs conv for ", i_t)
+        prec = self.load_prec(grid, i_t)
+        mask_prec = prec >=10
+
+        vdcs = self.load_filter_vdcs_seg(grid, i_t).isel(time = 0).rename({'latitude':'lat', 'longitude' : 'lon'})
+        vdcs = ~np.isnan(vdcs)
+
+        prec = xr.where(mask_prec & vdcs, prec, np.nan)
+
+        del vdcs
+        del mask_prec
+        gc.collect()
+        return prec
+
+    def load_vdcs_strat_prec(self, grid, i_t):
+        print("load vdcs strat for ", i_t)
+        prec = self.load_prec(grid, i_t)
+        mask_prec = prec < 10
+        vdcs = self.load_filter_vdcs_seg(grid, i_t).isel(time = 0).rename({'latitude':'lat', 'longitude' : 'lon'})
+        vdcs = ~np.isnan(vdcs)
+
+        prec = xr.where(mask_prec & vdcs, prec, np.nan)
+        del vdcs
+        del mask_prec
+        gc.collect()
+        return prec
 
 ####### THIS SECTION HAS FUNCTION FOR THE DYAMOND II WINTER PROJECT 
     def get_winter_2_datetime_from_i_t(self, i_t):
         date_ref = dt.datetime(year=self.dict_date_ref["year"], month=self.dict_date_ref["month"], day=self.dict_date_ref["day"])
-        delta = dt.timedelta(seconds=i_t*3600)
+        delta = dt.timedelta(seconds=i_t*3600) #3600 seconds in 30minutes which is the native timestem
         datetime = delta+date_ref
         return datetime
 
@@ -385,36 +417,58 @@ class Handler():
             season_path = 'pr_rlut_sam_summer_'
         elif self.settings["MODEL"] == "IFS_lowRes":
             season_path = 'pr_rlut_ifs_summer_'
-        
+        elif self.settings["MODEL"] == "NICAM_lowRes":
+            season_path = 'pr_rlut_nicam_summer_'
+        elif self.settings["MODEL"] == "UM_lowRes":
+            season_path = "pr_rlut_um_summer_"    
+        elif self.settings["MODEL"] == "ARPEGE_lowRes":
+            season_path = "pr_rlut_arpnh_summer_"
+        elif self.settings["MODEL"] ==  "MPAS_lowRes":
+            season_path = "pr_rlut_mpas_"
+        elif self.settings["MODEL"] == "FV3_lowRes":
+            season_path = "pr_rlut_fv3_"
 
         result = season_path+timestamp+'.nc'
         return result 
 
     def read_prec(self, grid, i_t):
-        # previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
         current_precac = self.load_var(grid, 'pracc', i_t)
         prec = current_precac #- previous_precac
-        # del previous_precac
         del current_precac
         gc.collect()
         return prec
 
     def diff_precac(self, grid, i_t):
-        # previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
         current_precac = self.load_var(grid, 'Precac', i_t)
         prec = current_precac #- previous_precac
-        # del previous_precac
         del current_precac
         gc.collect()
         return prec
     
     def diff_tp(self, grid, i_t):
-        # previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
         current_precac = self.load_var(grid, 'tp', i_t)
         prec = current_precac #- previous_precac
-        # del previous_precac
         del current_precac
         gc.collect()
+        return prec
+
+    def get_sa_tppn(self, grid, i_t):
+        current_precac = self.load_var(grid, 'sa_tppn', i_t)
+        prec = current_precac #- previous_precac
+        del current_precac
+        gc.collect()
+        return prec
+
+    def get_precipitation_flux(self, grid, i_t):
+        prec = self.load_var(grid, 'precipitation_flux', i_t)
+        return prec
+
+    def get_pr(self, grid, i_t):
+        prec = self.load_var(grid, 'pr', i_t)
+        return prec
+    
+    def get_rain(self, grid, i_t):
+        prec = self.load_var(grid, 'param8.1.0', i_t)
         return prec
 
     def read_seg(self, grid, i_t):
@@ -432,7 +486,6 @@ class Handler():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
             img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').mcs_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
         return img_toocan
-
 
     def read_filter_vdcs_seg(self, grid, i_t):
         img_toocan = self.read_seg(grid, i_t)
@@ -462,11 +515,12 @@ class Handler():
         
         return 0
 
-
     def mcs_coverage_cond_prec_15(self, grid, i_t):
         mcs_mask = self.read_seg_feng(grid, i_t)
         cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
         prec = self.load_var(grid, "Prec", i_t)
+        if self.settings["MODEL"] == 'FV3_lowRes': ## remose last lat because this specifi grid is not centered like the others
+            mcs_mask = mcs_mask.isel(latitude=slice(0, -1))
         mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
         del prec
         del cond_prec
@@ -491,6 +545,10 @@ class Handler():
         mcs_mask = self.read_filter_vdcs_seg(grid, i_t)
         cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
         prec = self.load_var(grid, "Prec", i_t)
+
+        if self.settings["MODEL"] == 'FV3_lowRes': ## remose last lat because this specifi grid is not centered like the others
+            mcs_mask = mcs_mask.isel(latitude=slice(0, -1))
+
         mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
         
         del prec
@@ -502,6 +560,9 @@ class Handler():
         mcs_mask = self.read_seg(grid, i_t)
         cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
         prec = self.load_var(grid, "Prec", i_t)
+
+        if self.settings["MODEL"] == 'FV3_lowRes': ## remose last lat because this specifi grid is not centered like the others
+            mcs_mask = mcs_mask.isel(latitude=slice(0, -1))
         mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
         
         del prec
@@ -522,6 +583,16 @@ class Handler():
         del cond_prec
         gc.collect()
         return sliding_clouds_mask
+
+    def read_sst(self, grid, i_t):
+        new_date = self.get_winter_2_datetime_from_i_t(i_t)
+        timestamp = new_date.strftime("%Y%m%d%H") ## to adapt for era
+        year = f"{new_date.year:04d}"
+        month = f"{new_date.month:02d}"
+        day = f"{new_date.day:02d}"
+        path = f"/bdd/OSTIA_SST_NRT/SST_GLO_SST_L4_NRT_OBSERVATIONS_010_001/METOFFICE-GLO-SST-L4-NRT-OBS-SST-V2/{year}/{month}/{year+month+day}120000-UKMO-L4_GHRSST-SSTfnd-OSTIA-GLOB-v02.0-fv02.0.nc"
+        var = xr.open_dataset(path).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).analysed_sst.load()[0]
+        return var
 
 ###### This is for OBS of MCSMIP 
     def get_mcsmip_dyamond_obs_datetime_from_i_t(self, i_t):

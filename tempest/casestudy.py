@@ -61,7 +61,7 @@ class CaseStudy():
                 self.var_names_2d = self._load_var_id_in_data_in(True)
                 self.var_names_3d = self._load_var_id_in_data_in(False)
 
-            elif self.model == 'DYAMOND_II_Winter_SAM' or self.model == 'SAM_lowRes' or self.model == "OBS_lowRes" or self.model == "IFS_lowRes":
+            elif self.model in ['DYAMOND_II_Winter_SAM', 'SAM_lowRes', "OBS_lowRes" ,"IFS_lowRes", "NICAM_lowRes", "UM_lowRes", "ARPEGE_lowRes", "MPAS_lowRes", "FV3_lowRes"]:
                 self.var_names_2d = self._read_var_id_in_data_in()
                 self.var_names_3d = []
             
@@ -207,7 +207,7 @@ class CaseStudy():
         var_names = []
         for var_id, variable in first_ds.data_vars.items():
             # Check if 'time', 'lon', and 'lat' are in the dimensions of the variable
-            if {'time', 'lon', 'lat'}.issubset(set(variable.dims)):
+            if {'time', 'lon', 'lat'}.issubset(set(variable.dims)) or {'xtime', 'lon', 'lat'}.issubset(set(variable.dims)): ## because MPAS guys are douchbags
                 # If the condition is met, append the variable name to the list
                 var_names.append(var_id)
                 self.days_i_t_per_var_id[var_id] = {}
@@ -414,6 +414,8 @@ class CaseStudy():
         if "vDCS_no_MCS" not in self.variables_names:
             self.variables_names.append("vDCS_no_MCS")
 
+        if "sst" not in self.variables_names:
+            self.variables_names.append("sst")
         # let's get rid off rel_table because of duplicates issue (not quantified)
         # if vanilla :
         #     # I love SQL time
@@ -425,10 +427,8 @@ class CaseStudy():
         #     return self.variables_names, self.days_i_t_per_var_id
         # else :
             ## I have a feeling that joint distrib doesn't work well otherwise but to check
-        if self.settings["MODEL"] == "OBS_lowRes":
-            var_id_fully_avail = "precipitationCal" #model dependant, check ditvi
-        elif "SAM" in self.settings["MODEL"]:
-            var_id_fully_avail = "Precac"
+
+        var_id_fully_avail = self.settings["new_var"]["dependencies"]["Prec"][0]
             
         self.days_i_t_per_var_id["MCS_label"] = self.days_i_t_per_var_id[var_id_fully_avail]
         self.days_i_t_per_var_id["MCS_label_Tb_Feng"] = self.days_i_t_per_var_id[var_id_fully_avail]
@@ -436,6 +436,8 @@ class CaseStudy():
         self.days_i_t_per_var_id["MCS_Feng"] = self.days_i_t_per_var_id[var_id_fully_avail]
         self.days_i_t_per_var_id["vDCS"] = self.days_i_t_per_var_id[var_id_fully_avail]
         self.days_i_t_per_var_id["vDCS_no_MCS"] = self.days_i_t_per_var_id[var_id_fully_avail]
+
+        self.days_i_t_per_var_id["sst"] = {key: [value[0]] for key, value in self.days_i_t_per_var_id[var_id_fully_avail].items()}
 
         return self.variables_names, self.days_i_t_per_var_id
 
@@ -450,10 +452,11 @@ class CaseStudy():
 
         i_min, i_max = self.settings["TIME_RANGE"][0], self.settings["TIME_RANGE"][1] 
         days = list(self.days_i_t_per_var_id[var_id].keys())
-        
+
         for day in days:
             indexes = self.days_i_t_per_var_id[var_id][day]
-            filtered_indexes = [idx for idx in indexes if (idx >= i_min) and (idx<=i_max)]
+            if type(indexes) is list : 
+                filtered_indexes = [idx for idx in indexes if (idx >= i_min) and (idx<=i_max)]
             if len(filtered_indexes) == 0 : del self.days_i_t_per_var_id[var_id][day]
             else : 
                 for i_t in to_skip:
@@ -461,7 +464,7 @@ class CaseStudy():
                         filtered_indexes.remove(i_t)
                 if len(filtered_indexes)==0 : del self.days_i_t_per_var_id[var_id][day]
                 else : self.days_i_t_per_var_id[var_id][day] = filtered_indexes             
-                
+                    
         return self.days_i_t_per_var_id
       
     def get_i_day_from_i_t(self, i_t):

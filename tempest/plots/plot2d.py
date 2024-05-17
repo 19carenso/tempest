@@ -167,12 +167,12 @@ def show_joint_histogram(ax,values,scale='linear',vmin=1e-3,vmax=1,cmap=None,**k
     """Show matrix data as it is, regardless of preset frame and ticks"""
 
     if scale == 'linear':
-        h = ax.matshow(values,vmin=vmin,vmax=vmax,origin='lower',cmap=cmap,**kwargs)
+        h = ax.matshow(values,vmin=vmin,vmax=vmax,origin='lower',cmap=cmap,**kwargs, zorder = 0)
     elif scale == 'log':
         if 'norm' in kwargs:
             del kwargs['norm']
 
-        h = ax.matshow(values,norm=LogNorm(vmin=vmin,vmax=vmax),origin='lower',cmap=cmap,**kwargs)
+        h = ax.matshow(values,norm=LogNorm(vmin=vmin,vmax=vmax),origin='lower',cmap=cmap,**kwargs, zorder = 0)
 
     ax.set_xticks([])
     ax.set_yticks([])

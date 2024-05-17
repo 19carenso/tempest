@@ -10,10 +10,10 @@ REGION: 'Tropics'
 DIR_INPUT: 'input/' 
 DIR_FIG: 'figures/' 
 DIR_OUT: 'output/'
-DIR_TEMPDATA: '/scratchx/mcarenso/tempest'
+DIR_TEMPDATA: '/homedata/mcarenso/tempest'
 
 # Where we store the data we need for the analysis, independant of model_region
-DIR_DATA_OUT: '/scratchx/mcarenso/tempest'
+DIR_DATA_OUT: '/homedata/mcarenso/tempest'
 
 # Data that are too big to be stored in your workspace
 DIR_DATA_2D_IN: '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/DYAMOND/Summer/OBS/olr_pcp/'
@@ -61,7 +61,8 @@ new_var: ## These list and dict must be sorted by dependency
       "vDCS_no_MCS",
       "MCS_cond_Prec_15",
       "vDCS_cond_Prec_15", 
-      "clouds_cond_Prec_15"
+      "clouds_cond_Prec_15",
+      "sst"
     ]
 
   dependencies:
@@ -73,7 +74,8 @@ new_var: ## These list and dict must be sorted by dependency
       "vDCS_no_MCS" : [],
       "MCS_cond_Prec_15" : ["MCS_Feng", "Prec"],
       "vDCS_cond_Prec_15" : ["vDCS", "Prec"],
-      "clouds_cond_Prec_15" : ["MCS_label", "Prec"]
+      "clouds_cond_Prec_15" : ["MCS_label", "Prec"],
+      "sst" : []
     }
     
   functions:
@@ -85,7 +87,8 @@ new_var: ## These list and dict must be sorted by dependency
       "vDCS_no_MCS" : "obs_filter_vdcs_no_mcs_seg",
       "MCS_cond_Prec_15": "obs_mcs_coverage_cond_prec_15",
       "vDCS_cond_Prec_15" : "obs_vdcs_coverage_cond_prec_15",
-      "clouds_cond_Prec_15" : "obs_clouds_coverage_cond_Prec_15"
+      "clouds_cond_Prec_15" : "obs_clouds_coverage_cond_Prec_15",
+      "sst" : "read_sst"
     }
 
 skip_prec_i_t : 

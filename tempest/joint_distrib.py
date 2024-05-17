@@ -26,7 +26,7 @@ class JointDistribution():
     Creates a joint distribution for two precipitations variables based on Grid prec.nc
     """
     
-    def __init__(self, grid, storm_tracker = None, nd=4, nbpd = 5, var_id = "Prec", var_id_1 = "mean_Prec", var_id_2 = "max_Prec", dist_mask = True, overwrite=False, verbose = False, regionalize = False, dist_bintype = "invlogQ"):
+    def __init__(self, grid, storm_tracker = None, nd=4, nbpd = 5, var_id = "Prec", var_id_1 = "mean_Prec", var_id_2 = "max_Prec", dist_mask = True, overwrite=False, verbose = True, regionalize = False, dist_bintype = "invlogQ"):
         """Constructor for class Distribution.
         Arguments:
         - name: name of reference variable
@@ -85,7 +85,7 @@ class JointDistribution():
             os.makedirs(self.jd_path)
 
         if overwrite : 
-            print("Overwrite set to true, so computing basics and saving them")
+            if self.verbose : print("Overwrite set to true, so computing basics and saving them")
             self.density = None
             self.bin_locations_stored = False
 
@@ -161,7 +161,7 @@ class JointDistribution():
             self.dist2.compute_distribution(self.sample2)
             with open(path_dist2, 'wb') as file:
                 pickle.dump(self.dist2, file)
-            print("Distribs have been recomputed because overwrite is set to True")
+            if self.verbose : print("Distribs have been recomputed because overwrite is set to True")
 
         elif os.path.exists(path_dist1) and os.path.exists(path_dist2):
             with open(path_dist1, 'rb') as file:
@@ -396,7 +396,8 @@ class JointDistribution():
             return data_over_density
         
     def joint_digit(self, d1, d2):
-        jdig = 100*d1 + d2
+        # if np.any(d2>=100) : print("PROBLEM, PROBLEM, PROBLEM")
+        jdig = 1000*d1 + d2
         return jdig
     
     def make_mask(self):
@@ -432,35 +433,41 @@ class JointDistribution():
         self.mask_show = 1.*self.mask_branch1_90 + 2.*self.mask_coloc_c_90 + 3.*self.mask_coloc_ac_90 + 4.*self.mask_branch2_90
         self.mask_show[self.mask_show == 0] = np.nan
 
-    def _fit_branches(self,cont,N):
+    def _fit_branches(self,cont,N, off_low, off_up):
 
         def func(x, a, b, c):
             return a * np.exp(-b * x) + c
-        
+    
+        # Identify the longest contour
         if cont.__class__ is list:
-            seg_1 = np.flip(cont[0],axis=1)
+            seg_1 = max(cont, key=len)  # Select the longest contour in the list
+            seg_1 = np.flip(seg_1, axis=1)
         else:
-            seg_1 = cont.allsegs[0][0]
-            
+            seg_1 = max(cont.allsegs[0], key=len)  # If allsegs is used, find the longest in the first set of segments
+
+        O = np.argmin(np.linalg.norm(seg_1, axis=1))
+
         # Branch 1 -- end of contour (upward branch)
-        xdata_1 = seg_1[-N:,0]
-        y_1 = ydata_1 = seg_1[-N:,1]
+        xdata_1 = seg_1[O-off_up-N:O-off_up,0]
+        y_1 = ydata_1 = seg_1[O-off_up-N:O-off_up,1]
 
         # fit
         popt_1, pcov_1 = curve_fit(func, ydata_1, xdata_1,p0=(-10,1,0))
         x_1 = func(ydata_1, *popt_1)
-        
+
         # Branch 2 -- start of contour
-        x_2 = xdata_2 = seg_1[:N,0]
-        ydata_2 = seg_1[:N,1]
+        x_2 = xdata_2 = seg_1[O+off_low:O+off_low+N,0]
+        ydata_2 = seg_1[O+off_low:O+off_low+N,1]
 
         # fit
         popt_2, pcov_2 = curve_fit(func, xdata_2, ydata_2,p0=(-10,1,0))
         y_2 = func(xdata_2, *popt_2)
-        
+                
+
+            
         return popt_1, x_1, y_1, popt_2, x_2, y_2, func
 
-    def plot(self, mask = True, branch = False, fig=None, ax=None):
+    def plot(self, mask = True, branch = False, fig=None, ax=None, title = None, N_branch=50, offset_low=0, offset_up=0):
         self.make_mask()
 
         if fig == ax == None :
@@ -468,24 +475,27 @@ class JointDistribution():
         
         Z = self.norm_density.T
 
-        title = f"Normalized density"
+        if title is None : title = f"Normalized density"
         scale = 'log'
         vbds = (1e-3, 1e3)
         cmap = plt.cm.BrBG
 
         # -- Frame
         ax_show = ax.twinx().twiny()
+        ax_show.set_zorder(0)
         ax = set_frame_invlog(ax, self.dist1.ranks, self.dist2.ranks)
-        ax.set_xlabel(r"1$^\circ\times 1$day extremes")
-        ax.set_ylabel(r"4km-30mn extremes")
+        ax.set_xlabel(r"1$^\circ\times 1$day")
+        ax.set_ylabel(r"km-scale")
         ax.set_title(title)
 
+        # I think this doesnt' work, uselessly
+        extent = (self.dist1.ranks[0], self.dist1.ranks[-1], self.dist2.ranks[0], self.dist2.ranks[-1])
         # -- Density
         
 
         # -- Masks multiscale categories and colorbar
         if mask : 
-            pcm = show_joint_histogram(ax_show, np.zeros_like(Z), scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
+            pcm = show_joint_histogram(ax_show, np.zeros_like(Z), scale=scale, vmin=vbds[0], vmax=vbds[1], extent = extent, cmap=cmap)
             pcm_mask = ax_show.imshow(self.mask_show.T,alpha=1,origin='lower')
             # cb = fig.colorbar(pcm_mask, ax=ax_show)
             # cb.set_label("Multiscale categories") 
@@ -494,32 +504,67 @@ class JointDistribution():
             norm = mpl.colors.BoundaryNorm(np.arange(0.5, 5), cmap.N)
             cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
                                 ax=ax_show, ticks=values, spacing='proportional')
-            cb.set_ticklabels(['Only km-scale', 'Mostly km-scale', 'Mostly mesoscale', 'Only mesoscale'])
+            cb.set_ticklabels(['Only\nkm-scale', 'Mostly\nkm-scale', 'Mostly\n1°x1day', 'Only\n1°x1day'])
 
         else : 
-            pcm = show_joint_histogram(ax_show, Z[:,:], scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap)
+            pcm = show_joint_histogram(ax_show, Z[:,:], scale=scale, vmin=vbds[0], vmax=vbds[1], extent = extent, cmap=cmap)
             cb = fig.colorbar(pcm, ax=ax_show)
             cb.set_label("Normalized density" ) 
 
-        if branch : 
-            # -- Branches
-            cont = measure.find_contours(Z, 1)
-            N = 60
-            # fit
-            popt_1, x_1, y_1, popt_2, x_2, y_2, func = self._fit_branches(cont,N)
-            x_branch_2 = y_branch_1 = np.linspace(2,45,45)
-            y_branch_2 = func(x_branch_2,*popt_2)
-            x_branch_1 = func(y_branch_1,*popt_1)
 
+        # -- Branches
+        Z_contour = np.copy(Z)
+        # Z_contour[18:, 18:] = 1 ## this number actually depends on nd and nbpd and the general shape of the Y 
+        cont = measure.find_contours(Z_contour, 1)
+        N = N_branch
+        # fit
+        popt_1, x_1, y_1, popt_2, x_2, y_2, func = self._fit_branches(cont,N, offset_low, offset_up)
+        x_branch_2 = y_branch_1 = np.linspace(5,N_branch,N_branch)
+        y_branch_2 = func(x_branch_2,*popt_2)
+        x_branch_1 = func(y_branch_1,*popt_1)
+        if branch[0] : 
             # show branches
             ax_show.plot(x_branch_1,y_branch_1,'k--')
             ax_show.plot(x_branch_2,y_branch_2,'k--')
-
+        if branch[1] : 
             # show 1-1 line
             ax_show.plot(x_branch_2,x_branch_2,'k--')
         
+        return ax, cb, ax_show
+
+    def plot_data_contour(self, data, contour, contour_2, levels, scale = 'linear', cmap = plt.cm.RdBu_r, norm = None, branch = False, title = None, label = '', fig =None ,ax = None, vbds = (None, None), cb_bool = True):
+        if fig==None and ax==None: 
+            fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4.85))
+        if title is None : 
+            title = f"Data over Normalized density"
+
+        # -- Frame
+        ax_show = ax.twinx().twiny()
+        ax = set_frame_invlog(ax, self.dist1.ranks, self.dist2.ranks)
+        ax.set_xlabel(self.var_id_1)
+        ax.set_ylabel(self.var_id_2)
+        ax.set_title(title)
+
+        # -- Density
+        Z = data.T
+        pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, norm = norm)
+
+        lines = ax_show.contour(contour.T, levels = levels,  colors='k', linestyles='solid', alpha = 0.2)
+        ax_show.clabel(lines, fontsize=8, inline = True, fmt = '%1.1f')
+
+        lines_2 = ax_show.contour(contour_2.T, levels = levels,  colors='k', linestyles='dashdot', alpha = 0.5)
+        ax_show.clabel(lines_2, fontsize=8, inline = True, fmt = '%1.1f')
+
+        # -- Colorbar
+        if cb_bool : 
+            cb = fig.colorbar(pcm, ax=ax_show)
+            # cb.set_label('Normalized density')
+            cb.set_label(label)
+        else :
+            cb = None
+        
         return ax, cb
-            
+
     def get_mask_yxt(self, d1, d2, var_days = None): #regional = False, lat_slice = None, lon_slice = None
         dj = self.joint_digit(d1+1, d2+1) # because np.digitize returns 1 for the i_bin 0
         
@@ -570,11 +615,11 @@ class JointDistribution():
         
         return centers  
 
-    def make_map(self, mask_yxt, data = None, func = np.sum, threshold = (-np.inf, np.inf)):
+    def make_map(self, mask_yxt, data = None, func = np.sum, threshold = (-np.inf, np.inf), cmap = None, fig =None, ax = None):
         ## image
         # cmap = plt.cm.bone_r
         # cmap = plt.cm.Blues
-        cmap = plt.cm.afmhot_r
+        if cmap is None : cmap = plt.cm.afmhot_r
         # cmap_mcs = plt.cm.get_cmap('Accent', 10)
 
         # compute figure size
@@ -596,15 +641,15 @@ class JointDistribution():
         lon_1d = self.get_coord_values('lon')
         
         lon_meshgrid, lat_meshgrid = np.meshgrid(lon_1d, lat_1d)
-        
         # data
         if func == np.sum:
             Z = np.sum(mask_yxt,axis=-1) # count
             Next = np.sum(Z)
         elif func == "data_weighted":
+            data  = data/np.max(data)  #useless but idk
             sum_weights = np.sum(data, axis=-1)
             mask = sum_weights == 0
-            mask = np.repeat(mask[..., np.newaxis], 20, axis = -1)
+            mask = np.repeat(mask[..., np.newaxis], 30, axis = -1) ## here 30 is actually the number of days, but I forgot how it works here
             masked_values = np.ma.masked_array(mask_yxt, mask)
             masked_weights = np.ma.masked_array(data, mask)
             weighted_means = np.ma.average(masked_values, axis=-1, weights=masked_weights)
@@ -637,7 +682,8 @@ class JointDistribution():
         dx = w/60
         cax = plt.axes([x+w+1.5*dx,y,dx,h])
         cbar = fig.colorbar(im, cax=cax, orientation='vertical')
-        cbar.ax.set_ylabel('Bincount (#)')
+        if func == np.sum : cbar.ax.set_ylabel('Bincount (#)')
+        elif func == "data_weighted" : cbar.ax.set_ylabel('Bincount weighted')
 
         return ax, cbar
     
@@ -733,7 +779,7 @@ class JointDistribution():
         # return this fraction
         return bin_fraction_mcs, bin_noise, bin_counts
 
-    def plot_data(self, data, data_noise = None, scale = 'linear', cmap = plt.cm.RdBu_r, norm = None, branch = False, label = '', fig =None ,ax = None, vbds = (None, None), cb_bool = True):
+    def plot_data(self, data, data_noise = None, scale = 'linear', cmap = plt.cm.RdBu_r, title = "No title yet...", norm = None, label = '', fig =None ,ax = None, vbds = (None, None), cb_bool = True):
         """
         TODO : mask data, keep bins
         """
@@ -747,7 +793,7 @@ class JointDistribution():
         
 
         # Should be passed as **kwargs
-        title = f"Data over Normalized density"
+        title = title
         cmap = cmap
 
         # -- Frame
@@ -755,10 +801,10 @@ class JointDistribution():
         ax = set_frame_invlog(ax, self.dist1.ranks, self.dist2.ranks)
         ax.set_xlabel(self.var_id_1)
         ax.set_ylabel(self.var_id_2)
-        # ax.set_title(title)
+        ax.set_title(title)
 
         # -- Density
-        pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, norm = norm)
+        pcm = show_joint_histogram(ax_show, Z, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, norm = norm) # extent? 
         if data_noise is not None :
             Z_noise = data_noise.T
             show_joint_histogram(ax_show, Z_noise, scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap, norm=norm, alpha=0.1)
@@ -770,26 +816,6 @@ class JointDistribution():
             cb.set_label(label)
         else :
             cb = None
-        
-        # # -- Masks multiscale categories
-        # ax_show.imshow(self.mask_show.T,alpha=0.5,origin='lower')
-
-        if branch : 
-            # -- Branches
-            cont = measure.find_contours(Z, 1)
-            N = 40
-            # fit
-            popt_1, x_1, y_1, popt_2, x_2, y_2, func = self._fit_branches(cont,N)
-            x_branch_2 = y_branch_1 = np.linspace(2,45,45)
-            y_branch_2 = func(x_branch_2,*popt_2)
-            x_branch_1 = func(y_branch_1,*popt_1)
-
-            # show branches
-            ax_show.plot(x_branch_1,y_branch_1,'k--')
-            ax_show.plot(x_branch_2,y_branch_2,'k--')
-
-            # show 1-1 line
-            ax_show.plot(x_branch_2,x_branch_2,'k--')
         
         return ax, cb
     
@@ -935,7 +961,10 @@ class JointDistribution():
         for d2 in range(n_j): 
             for d1 in range(n_i):
                 data_where_joint_bin = self.get_mask_yxt(d1, d2, var_days=var_days)
-                data_where_joint_bin = np.logical_and(data_where_joint_bin, mask[:,:,days_filter])
+                if mask is not None : 
+                    data_where_joint_bin = np.logical_and(data_where_joint_bin, mask[:,:,days_filter])
+                else : 
+                    data_where_joint_bin = data_where_joint_bin[:,:,days_filter]
 
                 if np.any(data_where_joint_bin==True):
                     to_mean = data.where(data_where_joint_bin)
@@ -944,7 +973,7 @@ class JointDistribution():
 
         return data_over_density
      
-    def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, norm = None, plot_func = np.nanmean, vbds = (None, None), fig = None, ax = None):
+    def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, title = "No title :( ", norm = None, plot_func = np.nanmean, vbds = (None, None), fig = None, ax = None):
         key = func+'_'+var_id
             # Trying to avoid the prec bug, maybe it's due to prec dataset already being open within jd
         if var_id == "Prec" : 
@@ -960,7 +989,7 @@ class JointDistribution():
         
         if fig is None : 
             fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4.71))
-        ax, cb = self.plot_data(var_over_density, data_noise = None, cmap = cmap, norm = norm, branch=False, vbds = vbds, fig = fig, ax = ax, label = key)
+        ax, cb = self.plot_data(var_over_density, data_noise = None, title = title, cmap = cmap, norm = norm, vbds = vbds, fig = fig, ax = ax, label = key)
         return ax, cb
         
     def add_mcs_var_from_labels(self, var_id, norm_rel_surf = 'lin', compat = 'overide'):
