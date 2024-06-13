@@ -9,7 +9,7 @@ from tempest import handler
 from tempest import joint_distrib
 from tempest import storm_tracker
 
-settings_path = 'settings/um_summer_30d.yaml'
+settings_path = 'settings/sam_summer_30d.yaml'
 
 workdir=os.getcwd()
 print(workdir)
@@ -24,14 +24,19 @@ gr = grid.Grid(cs, fast = True, overwrite= True, verbose_steps = False, verbose 
 # jd.prec.to_netcdf("/scratchx/mcarenso/tempest/DYAMOND_SAM_post_20_days_Tropics/prec2.nc")
 
 if __name__ == '__main__':
+    # 1st batch 
     # gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("Prec_lowRes", overwrite_var_id=True)
+
     # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
     # gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
+    # gr.compute_funcs_for_var_id("sst", overwrite_var_id=True)
+
+    # 2nd batch
     # gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
-    
-    gr.compute_funcs_for_var_id("MCS_cond_Prec_15")
-    gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
-    gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
+    # gr.compute_funcs_for_var_id("MCS_cond_Prec_15")
+    # gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
+    # gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
 
 # st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
 

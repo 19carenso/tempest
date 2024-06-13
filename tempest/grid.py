@@ -464,7 +464,6 @@ class Grid():
         
         if var_id == "Prec" :
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
-            # funcs = ["cond_alpha_50", "cond_alpha_85", "convective_10"]
             funcs = ["cond_alpha_00", "cond_alpha_01", "cond_alpha_05", "cond_alpha_10","cond_alpha_20",  "cond_alpha_25", "cond_alpha_33", "cond_alpha_40",
                      "cond_alpha_50", "cond_alpha_60", "cond_alpha_67", "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_99",
                      "convective_01", "convective_02", "convective_03", "convective_04", "convective_05", "convective_06", "convective_08", "convective_10", 
@@ -675,6 +674,7 @@ class Grid():
                 results.append(var_regrid_idx)
 
             del var_current
+            del var_regrid_idx
             gc.collect()
 
             return results
@@ -763,12 +763,12 @@ class Grid():
         """
         weights = self.pixel_surface
         if np.shape(data_on_center)!=np.shape(weights): ## this is specifically for sst
-            weights = np.repeat(np.repeat(weights, 2, axis=0), 2, axis=1) / 4
+            data_on_center = data_on_center.values.reshape(data_on_center.shape[0]//2, 2, data_on_center.shape[1]//2, 2).mean(axis=(1, 3))
         x = data_on_center*weights if type(data_on_center) == np.ndarray else data_on_center.values*weights
         X = self.sum_data_from_center_to_global(data_on_center = x)
         global_weights = self.grid_surface
-
-        return np.expand_dims(X/global_weights , axis =-1)
+        # return np.expand_dims(X/global_weights , axis =-1)
+        return X/global_weights
 
     def daily_spatial_mean_weighted(self, data_on_center):
         """
@@ -878,7 +878,7 @@ class Grid():
         # expand so that we can concatenate futur dataarrays along day dim
         return output
 
-    def get_cumsum_data_from_center_to_global(self, data_on_center, i_t_within_day, threshold = 0.5):
+    def get_cumsum_data_from_center_to_global(self, data_on_center, i_t_within_day, threshold = 0.85):
         x = data_on_center if type(data_on_center) == np.ndarray else data_on_center.values #1st axis becomes time
         mean_check = np.full((self.n_lat, self.n_lon), np.nan)
         sigma_global = np.full((self.n_lat, self.n_lon), np.nan)
@@ -889,10 +889,11 @@ class Grid():
         for i, slice_i_lat in enumerate(self.slices_i_lat):
             # if i%10==0 : print(i, end='..')
             for j, slice_j_lon in enumerate(self.slices_j_lon[i]):
-                x_subset = np.sort(x[:, slice_i_lat, slice_j_lon].flatten()) 
-                x_subset_cumsum  = np.cumsum(x_subset) 
+                x_subset_dirty = np.sort(x[:, slice_i_lat, slice_j_lon].flatten()) 
+                x_subset = x_subset_dirty[~np.isnan(x_subset_dirty)]
+                x_subset_cumsum  = np.nancumsum(x_subset) 
                 total_prec = x_subset_cumsum[-1]
-                sigma_time_array = np.zeros(shape = 48)
+                sigma_time_array = np.zeros(shape = 48) # should catch a unique value depending on model there
 
                 if total_prec == 0 : 
                     mean = 0 
@@ -904,14 +905,15 @@ class Grid():
                 else : 
                     x_clean = x_subset_cumsum/total_prec
                     idx_rcond = np.where(x_clean > threshold)[0] # dynamically catch threshold from var_name.
-                    rcond = np.mean(x_subset[idx_rcond])
+                    rcond = np.nanmean(x_subset[idx_rcond])
                     sigma = len(x_subset[idx_rcond])/len(x_subset)
                     pcond = x_subset[idx_rcond[0]] # the precip value at which precips start to be acounted in Rcond
-                    mean = np.mean(x_subset)
+                    mean = np.nanmean(x_subset)
                     sigma_time = []
                     for t in range(np.shape(x[:, slice_i_lat, slice_j_lon])[0]):
-                        x_t_subset = x[t, slice_i_lat, slice_j_lon].flatten()
-                        sigma_t = sum(x_t_subset>pcond)/len(x_t_subset)
+                        x_t_subset_dirty = x[t, slice_i_lat, slice_j_lon].flatten()
+                        x_t_subset = x_t_subset_dirty[~np.isnan(x_t_subset_dirty)]
+                        sigma_t = np.nansum(x_t_subset>pcond)/len(x_t_subset)
                         sigma_time.append(sigma_t)
                     sigma_time_array = np.array(sigma_time)
                     

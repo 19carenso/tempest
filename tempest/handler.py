@@ -441,7 +441,13 @@ class Handler():
     def diff_precac(self, grid, i_t):
         current_precac = self.load_var(grid, 'Precac', i_t)
         prec = current_precac #- previous_precac
+        prec = xr.where(prec < 0, np.nan, prec)
         del current_precac
+        gc.collect()
+        return prec
+    
+    def read_lowRes_prec(self, grid, i_t):
+        prec = self.load_var(grid, 'Prec', i_t)
         gc.collect()
         return prec
     

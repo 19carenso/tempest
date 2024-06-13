@@ -51,7 +51,7 @@ class JointDistribution():
 
         if type(dist_mask) is not bool:
             if dist_mask.shape == self.prec[var_id_1].shape:
-                self.dist_mask = dist_mask & xr.where(self.prec.mean_Prec > 0.001, True, False) #self.prec.Treshold_cond_alpha_50_Prec > 2
+                self.dist_mask = dist_mask #& xr.where(self.prec.mean_Prec > 0.001, True, False) #self.prec.Treshold_cond_alpha_50_Prec > 2
         elif dist_mask == True : 
             dist_mask = xr.where(self.prec.mean_Prec > 0.01, True, False)
         elif dist_mask == False : 
@@ -538,6 +538,39 @@ class JointDistribution():
         if title is None : 
             title = f"Data over Normalized density"
 
+        def remove_small_blobs(arr, threshold=10):
+            def get_blob_sum_and_coords(x, y, visited):
+                stack = [(x, y)]
+                coords = []
+                blob_sum = 0
+
+                while stack:
+                    cx, cy = stack.pop()
+                    if (cx, cy) not in visited:
+                        visited.add((cx, cy))
+                        blob_sum += arr[cx, cy]
+                        coords.append((cx, cy))
+
+                        # Check all 4 adjacent cells
+                        for nx, ny in [(cx-1, cy), (cx+1, cy), (cx, cy-1), (cx, cy+1)]:
+                            if 0 <= nx < arr.shape[0] and 0 <= ny < arr.shape[1] and (nx, ny) not in visited and arr[nx, ny] != 0:
+                                stack.append((nx, ny))
+
+                return blob_sum, coords
+
+            # Create a copy of the array to modify
+            result = np.copy(arr)
+            visited = set()
+
+            for i in range(arr.shape[0]):
+                for j in range(arr.shape[1]):
+                    if (i, j) not in visited and arr[i, j] != 0:
+                        blob_sum, coords = get_blob_sum_and_coords(i, j, visited)
+                        if blob_sum <= threshold:
+                            for x, y in coords:
+                                result[x, y] = 0
+
+            return result
         # -- Frame
         ax_show = ax.twinx().twiny()
         ax = set_frame_invlog(ax, self.dist1.ranks, self.dist2.ranks)
@@ -552,9 +585,9 @@ class JointDistribution():
         lines = ax_show.contour(contour.T, levels = levels,  colors='k', linestyles='solid', alpha = 0.2)
         ax_show.clabel(lines, fontsize=8, inline = True, fmt = '%1.1f')
 
-        lines_2 = ax_show.contour(contour_2.T, levels = levels,  colors='k', linestyles='dashdot', alpha = 0.5)
+        lines_2 = ax_show.contour(remove_small_blobs(contour_2.T, threshold =3), levels = levels,  colors='k', linestyles='dashdot', alpha = 0.5)
         ax_show.clabel(lines_2, fontsize=8, inline = True, fmt = '%1.1f')
-
+        print("contour shapes : ", np.shape(contour), np.shape(contour_2))
         # -- Colorbar
         if cb_bool : 
             cb = fig.colorbar(pcm, ax=ax_show)
@@ -817,7 +850,7 @@ class JointDistribution():
         else :
             cb = None
         
-        return ax, cb
+        return ax, cb, ax_show
     
     def get_labels_per_region(self):
         ### TODO, put this in settings when working on it again. Validate the regions otherwise
@@ -989,8 +1022,8 @@ class JointDistribution():
         
         if fig is None : 
             fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4.71))
-        ax, cb = self.plot_data(var_over_density, data_noise = None, title = title, cmap = cmap, norm = norm, vbds = vbds, fig = fig, ax = ax, label = key)
-        return ax, cb
+        ax, cb, ax_show = self.plot_data(var_over_density, data_noise = None, title = title, cmap = cmap, norm = norm, vbds = vbds, fig = fig, ax = ax, label = key)
+        return ax, cb, ax_show
         
     def add_mcs_var_from_labels(self, var_id, norm_rel_surf = 'lin', compat = 'overide'):
         """

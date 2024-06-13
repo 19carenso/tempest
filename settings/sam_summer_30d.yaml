@@ -55,6 +55,7 @@ new_var: ## These list and dict must be sorted by dependency
   variables_id:
     [
       "Prec", 
+      "Prec_lowRes"
       "MCS_label",
       "MCS_Feng", 
       "vDCS",
@@ -70,6 +71,7 @@ new_var: ## These list and dict must be sorted by dependency
   dependencies:
     {
       "Prec" : ["Precac", "Precac-1"], 
+      "Prec_lowRes" : ["Prec"],
       "MCS_label" : [], 
       "MCS_Feng" : [],
       "vDCS" : [],
@@ -85,6 +87,7 @@ new_var: ## These list and dict must be sorted by dependency
   functions:
     {
       "Prec" : "diff_precac",
+      "Prec_lowRes" : "read_lowRes_prec",
       "MCS_label" : "read_seg", 
       "MCS_Feng" : "read_seg_feng", 
       "vDCS" : "read_filter_vdcs_seg",

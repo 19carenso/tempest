@@ -1,0 +1,215 @@
+
+OCEAN + LAND 
+
+ARPEGE
+1°x1day rank 0.0 -0.0
+km-scale rank 0.0 -0.0
+1°x1day rank 90.0 0.52
+km-scale rank 90.0 17.46
+1°x1day rank 99.0 1.94
+km-scale rank 99.0 31.02
+1°x1day rank 99.9 4.33
+km-scale rank 99.9 44.26
+1°x1day rank 99.99 10.16
+km-scale rank 99.99 61.18
+1°x1day rank 99.99900000000001 22.8
+km-scale rank 99.99900000000001 91.96
+FV3
+1°x1day rank 0.0 -0.0
+km-scale rank 0.0 -0.0
+1°x1day rank 90.0 0.36
+km-scale rank 90.0 14.36
+1°x1day rank 99.0 2.04
+km-scale rank 99.0 42.99
+1°x1day rank 99.9 4.78
+km-scale rank 99.9 62.31
+1°x1day rank 99.99 8.24
+km-scale rank 99.99 80.54
+1°x1day rank 99.99900000000001 12.48
+km-scale rank 99.99900000000001 98.51
+IFS
+1°x1day rank 0.0 -0.0
+km-scale rank 0.0 -0.0
+1°x1day rank 90.0 0.41
+km-scale rank 90.0 26.19
+1°x1day rank 99.0 2.28
+km-scale rank 99.0 52.48
+1°x1day rank 99.9 4.68
+km-scale rank 99.9 66.94
+1°x1day rank 99.99 6.74
+km-scale rank 99.99 79.24
+1°x1day rank 99.99900000000001 9.14
+km-scale rank 99.99900000000001 89.38
+MPAS
+1°x1day rank 0.0 0.0
+km-scale rank 0.0 0.0
+1°x1day rank 90.0 0.42
+km-scale rank 90.0 3.66
+1°x1day rank 99.0 1.26
+km-scale rank 99.0 12.27
+1°x1day rank 99.9 2.86
+km-scale rank 99.9 31.2
+1°x1day rank 99.99 5.41
+km-scale rank 99.99 56.08
+1°x1day rank 99.99900000000001 7.91
+km-scale rank 99.99900000000001 77.04
+NICAM
+1°x1day rank 0.0 -0.0
+km-scale rank 0.0 -0.0
+1°x1day rank 90.0 0.47
+km-scale rank 90.0 36.79
+1°x1day rank 99.0 2.09
+km-scale rank 99.0 70.31
+1°x1day rank 99.9 4.71
+km-scale rank 99.9 132.67
+1°x1day rank 99.99 9.41
+km-scale rank 99.99 195.88
+1°x1day rank 99.99900000000001 18.01
+km-scale rank 99.99900000000001 272.57
+OBS
+1°x1day rank 0.0 0.0
+km-scale rank 0.0 0.0
+1°x1day rank 90.0 0.36
+km-scale rank 90.0 8.41
+1°x1day rank 99.0 2.09
+km-scale rank 99.0 31.36
+1°x1day rank 99.9 5.2
+km-scale rank 99.9 58.95
+1°x1day rank 99.99 10.22
+km-scale rank 99.99 81.86
+1°x1day rank 99.99900000000001 18.14
+km-scale rank 99.99900000000001 97.72
+SAM
+1°x1day rank 0.0 -0.9
+km-scale rank 0.0 -0.14
+1°x1day rank 90.0 0.49
+km-scale rank 90.0 26.11
+1°x1day rank 99.0 2.04
+km-scale rank 99.0 44.34
+1°x1day rank 99.9 4.05
+km-scale rank 99.9 61.53
+1°x1day rank 99.99 7.32
+km-scale rank 99.99 101.84
+1°x1day rank 99.99900000000001 14.33
+km-scale rank 99.99900000000001 161.14
+UM
+1°x1day rank 0.0 0.0
+km-scale rank 0.0 0.0
+1°x1day rank 90.0 0.42
+km-scale rank 90.0 26.45
+1°x1day rank 99.0 2.39
+km-scale rank 99.0 76.64
+1°x1day rank 99.9 5.46
+km-scale rank 99.9 107.95
+1°x1day rank 99.99 9.67
+km-scale rank 99.99 140.98
+1°x1day rank 99.99900000000001 15.13
+km-scale rank 99.99900000000001 172.77
+
+
+OCEAN ONLY 
+
+ARPEGE
+1°x1day rank 0.0 -0.0
+km-scale rank 0.0 -0.0
+1°x1day rank 90.0 0.5
+km-scale rank 90.0 16.85
+1°x1day rank 99.0 2.04
+km-scale rank 99.0 30.65
+1°x1day rank 99.9 4.62
+km-scale rank 99.9 44.16
+1°x1day rank 99.99 10.84
+km-scale rank 99.99 61.02
+1°x1day rank 99.99900000000001 22.85
+km-scale rank 99.99900000000001 81.1
+FV3
+1°x1day rank 0.0 -0.0
+km-scale rank 0.0 -0.0
+1°x1day rank 90.0 0.35
+km-scale rank 90.0 13.58
+1°x1day rank 99.0 2.05
+km-scale rank 99.0 43.24
+1°x1day rank 99.9 4.67
+km-scale rank 99.9 61.88
+1°x1day rank 99.99 8.06
+km-scale rank 99.99 80.0
+1°x1day rank 99.99900000000001 12.2
+km-scale rank 99.99900000000001 92.03
+IFS
+1°x1day rank 0.0 -0.0
+km-scale rank 0.0 -0.0
+1°x1day rank 90.0 0.36
+km-scale rank 90.0 23.53
+1°x1day rank 99.0 2.26
+km-scale rank 99.0 52.34
+1°x1day rank 99.9 4.67
+km-scale rank 99.9 67.15
+1°x1day rank 99.99 6.7
+km-scale rank 99.99 78.47
+1°x1day rank 99.99900000000001 8.42
+km-scale rank 99.99900000000001 88.68
+MPAS
+1°x1day rank 0.0 0.0
+km-scale rank 0.0 0.0
+1°x1day rank 90.0 0.42
+km-scale rank 90.0 3.49
+1°x1day rank 99.0 1.24
+km-scale rank 99.0 11.54
+1°x1day rank 99.9 2.77
+km-scale rank 99.9 28.98
+1°x1day rank 99.99 5.16
+km-scale rank 99.99 49.86
+1°x1day rank 99.99900000000001 7.4
+km-scale rank 99.99900000000001 73.46
+NICAM
+1°x1day rank 0.0 -0.0
+km-scale rank 0.0 -0.0
+1°x1day rank 90.0 0.43
+km-scale rank 90.0 35.24
+1°x1day rank 99.0 2.12
+km-scale rank 99.0 69.26
+1°x1day rank 99.9 4.73
+km-scale rank 99.9 130.65
+1°x1day rank 99.99 9.19
+km-scale rank 99.99 194.66
+1°x1day rank 99.99900000000001 20.33
+km-scale rank 99.99900000000001 266.43
+OBS
+1°x1day rank 0.0 0.0
+km-scale rank 0.0 0.0
+1°x1day rank 90.0 0.34
+km-scale rank 90.0 7.96
+1°x1day rank 99.0 2.06
+km-scale rank 99.0 30.64
+1°x1day rank 99.9 5.3
+km-scale rank 99.9 59.31
+1°x1day rank 99.99 10.41
+km-scale rank 99.99 81.91
+1°x1day rank 99.99900000000001 18.79
+km-scale rank 99.99900000000001 98.35
+SAM
+1°x1day rank 0.0 -0.67
+km-scale rank 0.0 -0.1
+1°x1day rank 90.0 0.47
+km-scale rank 90.0 25.42
+1°x1day rank 99.0 2.01
+km-scale rank 99.0 44.18
+1°x1day rank 99.9 3.96
+km-scale rank 99.9 61.11
+1°x1day rank 99.99 6.9
+km-scale rank 99.99 99.89
+1°x1day rank 99.99900000000001 12.52
+km-scale rank 99.99900000000001 163.2
+UM
+1°x1day rank 0.0 0.0
+km-scale rank 0.0 0.0
+1°x1day rank 90.0 0.4
+km-scale rank 90.0 23.29
+1°x1day rank 99.0 2.4
+km-scale rank 99.0 75.54
+1°x1day rank 99.9 5.48
+km-scale rank 99.9 106.87
+1°x1day rank 99.99 9.48
+km-scale rank 99.99 137.56
+1°x1day rank 99.99900000000001 14.64
+km-scale rank 99.99900000000001 166.67
