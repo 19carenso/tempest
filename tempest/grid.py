@@ -462,7 +462,7 @@ class Grid():
         keys = []
         keys_loaded = [key for key in list(var_ds.variables) if var_id in key] 
         
-        if var_id == "Prec" :
+        if var_id == "Prec" or "Prec_lowRes":
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
             funcs = ["cond_alpha_00", "cond_alpha_01", "cond_alpha_05", "cond_alpha_10","cond_alpha_20",  "cond_alpha_25", "cond_alpha_33", "cond_alpha_40",
                      "cond_alpha_50", "cond_alpha_60", "cond_alpha_67", "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_99",
@@ -623,7 +623,7 @@ class Grid():
 
         if alpha_cond_bool or convective_cond_bool:
             print("loading whole day data for day", day, "for alpha_cond")
-            assert var_id == 'Prec'
+            assert var_id == 'Prec' or var_id == "Prec_lowRes"
             var_day = []
             i_t_for_day = self.casestudy.days_i_t_per_var_id[var_id][day]
             i_t_within_day = np.array(i_t_for_day) % 48

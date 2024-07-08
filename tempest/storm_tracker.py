@@ -110,7 +110,7 @@ class StormTracker():
                     # Check the condition based on INT_UTC_timeEnd
                 if storm.INT_UTC_timeEnd / self.Utime_step >= self.i_t_start:
                     # Add the storm to the new list if the condition is met
-                    if self.settings["MODEL"] in ["SAM_lowRes", "OBS_lowRes", "IFS_lowRes"] and self.label_var_id == "MCS_Feng":
+                    if "lowRes" in self.settings["MODEL"] and self.label_var_id == "MCS_Feng":
                         if storm.INT_classif_MCS : filtered_storms.append(storm)
                     elif self.label_var_id == "vDCS":
                         if  (storm.INT_TbMin<210) & (storm.INT_duration > 2.5) & (storm.INT_velocityAvg < 20):

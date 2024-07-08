@@ -11,6 +11,7 @@ import warnings
 import time
 import subprocess
 import cloudmetrics
+import pywt 
 
 from .thermo import saturation_specific_humidity
 from . import storm_tracker
@@ -448,8 +449,42 @@ class Handler():
     
     def read_lowRes_prec(self, grid, i_t):
         prec = self.load_var(grid, 'Prec', i_t)
+
+        # Fill NaN values with zero
+        def fill_nan(data):
+            return np.nan_to_num(data, nan=0.0)
+
+        # Apply NaN filling
+        prec_nonan = fill_nan(prec)
+        
+        # Perform 2D wavelet transform
+        coeffs = pywt.wavedec2(prec_nonan, 'db1', level=1)
+
+        # Zero out high-frequency coefficients
+        coeffs[1:] = [(np.zeros_like(detail_coeff[0]), 
+                    np.zeros_like(detail_coeff[1]), 
+                    np.zeros_like(detail_coeff[2])) 
+                    for detail_coeff in coeffs[1:]]
+
+        # Reconstruct the data
+        smoothed_prec = pywt.waverec2(coeffs, 'db1')
+
+        # Ensure the output shape matches the original input shape
+        smoothed_prec = smoothed_prec[:prec.shape[0], :prec.shape[1]]
+
+    # Convert the result back to xarray.DataArray
+        smoothed_prec_xr = xr.DataArray(
+            smoothed_prec,
+            dims=prec.dims,
+            coords=prec.coords,
+            attrs=prec.attrs
+        )
+            # Clean up
+        del prec
+        del coeffs
         gc.collect()
-        return prec
+
+        return smoothed_prec_xr
     
     def diff_tp(self, grid, i_t):
         current_precac = self.load_var(grid, 'tp', i_t)

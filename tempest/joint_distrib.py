@@ -7,8 +7,14 @@ import time
 import xarray as xr 
 import seaborn as sns
 
+from numpy import ma
+
 from skimage import measure # pylance: disable=import-error 
+from skimage.restoration import inpaint
+
 from scipy.optimize import curve_fit
+from scipy.ndimage import gaussian_filter
+
 import warnings
 from math import ceil 
 
@@ -1006,10 +1012,23 @@ class JointDistribution():
 
         return data_over_density
      
-    def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, title = "No title :( ", norm = None, plot_func = np.nanmean, vbds = (None, None), fig = None, ax = None):
+    def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, title = "No title :( ", norm = None, plot_func = np.nanmean, vbds = (None, None), fig = None, ax = None, density = None):
+        key = func+'_'+var_id
+
+        if density is None : 
+            var_over_density = self.get_var_id_density_over_jdist(var_id, func, mask = mask, plot_func = np.nanmean) #more a da than ds but whatever
+        else : 
+            var_over_density = density
+            
+        if fig is None : 
+            fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4.71))
+        ax, cb, ax_show = self.plot_data(var_over_density, data_noise = None, title = title, cmap = cmap, norm = norm, vbds = vbds, fig = fig, ax = ax, label = key)
+        return ax, cb, ax_show, var_over_density
+
+    def get_var_id_density_over_jdist(self, var_id, func, mask, plot_func = np.nanmean):
         key = func+'_'+var_id
             # Trying to avoid the prec bug, maybe it's due to prec dataset already being open within jd
-        if var_id == "Prec" : 
+        if var_id == self.var_id : 
             ds_var = self.prec.sortby("days")[key]
         elif func == 'MCS':
             ds_var = self.grid.get_var_id_ds(self.st_label_var_id).sortby("days")[var_id]
@@ -1018,13 +1037,10 @@ class JointDistribution():
             
         var_days = list(ds_var.days.values)
         ds_var = ds_var.sel(days = var_days) #.where(mask) # redundant ? 
-        var_over_density = self.compute_conditional_data_over_density(ds_var, mask = mask, plot_func = np.nanmean) #more a da than ds but whatever
+        var_over_density = self.compute_conditional_data_over_density(ds_var, mask = mask, plot_func = plot_func) #more a da than ds but whatever
         
-        if fig is None : 
-            fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4.71))
-        ax, cb, ax_show = self.plot_data(var_over_density, data_noise = None, title = title, cmap = cmap, norm = norm, vbds = vbds, fig = fig, ax = ax, label = key)
-        return ax, cb, ax_show
-        
+        return var_over_density 
+
     def add_mcs_var_from_labels(self, var_id, norm_rel_surf = 'lin', compat = 'overide'):
         """
         Not the same var_id than usual
@@ -1124,7 +1140,7 @@ class JointDistribution():
         # plot and stipple
         fig, ax  = plt.subplots(figsize = figsize)
         cmap = sns.color_palette("icefire", as_cmap=True)
-        ax, cb = self.plot_data(cond_max, cmap = cmap, fig=fig, ax=ax)
+        ax, cb, ax_show = self.plot_data(cond_max, cmap = cmap, fig=fig, ax=ax)
         cb.remove()
 
         stipple_mask = cond_max_diff<stipple_threshold
@@ -1154,6 +1170,7 @@ class JointDistribution():
         plt.tight_layout()
         plt.show()
 
+        return fig, ax, ax_show
 
     #     ## TODO catch var_unit somehow for cleaner labels
     #     key = func+'_'+var_id

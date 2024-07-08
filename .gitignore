@@ -11,3 +11,4 @@ output/DYAMOND_SAM_ITCZ_intro/grid_attributes.pkl
 dev/
 *.png
 dask-worker-space/
+density*

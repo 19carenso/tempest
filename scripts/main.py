@@ -9,7 +9,7 @@ from tempest import handler
 from tempest import joint_distrib
 from tempest import storm_tracker
 
-settings_path = 'settings/sam_summer_30d.yaml'
+settings_path = 'settings/obsv7_summer_30d.yaml'
 
 workdir=os.getcwd()
 print(workdir)
@@ -18,19 +18,22 @@ sys.path.append(workdir)
 # Instantiate CaseStudy by passing the settings. 
 # Should also create appropriate directories
 hdlr = handler.Handler(settings_path)
-cs = casestudy.CaseStudy(hdlr, overwrite = True ,verbose = True)
-gr = grid.Grid(cs, fast = True, overwrite= True, verbose_steps = False, verbose = False)
+overwrite = False
+cs = casestudy.CaseStudy(hdlr, overwrite = overwrite ,verbose = True)
+gr = grid.Grid(cs, fast = True, overwrite= overwrite, verbose_steps = False, verbose = False)
 # jd.prec['mean_Prec_cond_50'] = jd.prec["cond_alpha_50_Prec"] / jd.prec["Sigma_cond_alpha_50_Prec"]
 # jd.prec.to_netcdf("/scratchx/mcarenso/tempest/DYAMOND_SAM_post_20_days_Tropics/prec2.nc")
 
 if __name__ == '__main__':
-    # 1st batch 
-    # gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
-    gr.compute_funcs_for_var_id("Prec_lowRes", overwrite_var_id=True)
+    
+    # gr.compute_funcs_for_var_id("Prec_lowRes", overwrite_var_id=True)
 
-    # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
-    # gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
-    # gr.compute_funcs_for_var_id("sst", overwrite_var_id=True)
+    # 1st batch 
+    gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
+
+    gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("sst", overwrite_var_id=True)
 
     # 2nd batch
     # gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
