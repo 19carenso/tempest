@@ -61,7 +61,7 @@ class MCS_IntParameters(object):
 
 ## Fin ajout B. Fildier ##
 
-
+## ajout M Carenso ## 
 	def __eq__(self, other):
 		"""Determine if two MCS_IntParameters instances are equal."""
 		if not isinstance(other, MCS_IntParameters):
@@ -102,6 +102,8 @@ class MCS_IntParameters(object):
             self.INT_PF_maxAREA_0mmh == other.INT_PF_maxAREA_0mmh and
             self.INT_classif_MCS == other.INT_classif_MCS
         )
+
+## Fin ajout M Carenso ## 
 
 class MCS_Lifecycle(object):
 
@@ -166,37 +168,27 @@ class MCS_Lifecycle(object):
 ## Fin ajout B. Fildier ##
 
 		
-def load_toocan_mcsmip(FileTOOCAN):
+def load_TOOCAN(FileTOOCAN):	# SAUF POUR : Summer/OBSv7 | Summer/SCREAMv1 | Winter/OBSv7 | Winter/SCREAMv1
 
 	lunit=gzip.open(FileTOOCAN,'rt')
 
-	#
-	# Read the Header
+	# New method for reading the Header , plus souple sur la taille du header    
 	##########################
-	header1 = lunit.readline()   ############################################################
-	header2 = lunit.readline()   ############################################################
-	header3 = lunit.readline()   # TOOCAN version       :            2.07
-	header4 = lunit.readline()   # institution          : CNRS/IPSL/LEGOS
-	header5 = lunit.readline()   # creator_name         : Thomas Fiolleau
-	header6 = lunit.readline()   # MODEL                :             FV3
-	header7 = lunit.readline()   #
-	header8 = lunit.readline()   # temporal resolution  :          60 min
-	header9 = lunit.readline()   # spatial resolution   :         0.10 degree
-	header10 = lunit.readline()  #
-	header11 = lunit.readline()  # Nb columns           :            3600
-	header12 = lunit.readline()  # Nb Lines             :            1200
-	header13 = lunit.readline()  # lonmin/lonmax        :    -180     180
-	header14 = lunit.readline()  # latmin/latmax        :     -60      60
-	header15 = lunit.readline()  # Population of MCS    :          119582
-	header16 = lunit.readline()  ############################################################
-	header17 = lunit.readline()  ############################################################
-	header18 = lunit.readline()  # 
-	header19 = lunit.readline()  # ==>          label qltyDCS classif    duration         ...
-	header20 = lunit.readline()  #  qltyGEO          Tbmin     Tbavg_241K     Tbavg_210K  ...
-	header21 = lunit.readline()  #
+	Headers = []
+	while True:
+		line_h = lunit.readline()
+		if line_h.startswith("#"):
+			Headers.append(line_h.strip())
+		else:
+			break
 
-	# t=header9.split()
-	# temporalresolution = float(t[-2])
+	header_col1 = lunit.readline()   # ==>     DCS_number           INT_qltyDCS           INT_classif          INT_duration      INT_UTC_timeInit    INT_localtime_Init           INT_lonInit           INT_latInit       INT_UTC_timeEnd     INT_localtime_End            INT_lonEnd            INT_latEnd       INT_velocityAvg          INT_distance            INT_lonmin            INT_latmin            INT_lonmax            INT_latmax             INT_TbMin   INT_surfmaxPix_235K   INT_surfmaxkm2_235K   INT_surfmaxkm2_220K   INT_surfmaxkm2_210K   INT_surfmaxkm2_200K   INT_surfcumkm2_235K     INT_classif_JIRAK    INT_classif_MADDOX        INT_TSnumber_IBTRACS        INT_TSnature_IBTRACS   INT_TSmindistance_IBTRACS
+	header_col2 = lunit.readline()   #        QCgeo_IRimage            LC_tbmin       LC_tbavg_235K       LC_tbavg_208K       LC_tbavg_200K          LC_tb_90th         LC_UTC_time        LC_localtime              LC_lon              LC_lat                LC_x                LC_y         LC_velocity      LC_sminor_235K      LC_smajor_235K         LC_ecc_235K LC_orientation_235K      LC_sminor_220K      LC_smajor_220K         LC_ecc_220K LC_orientation_220K     LC_surfPix_235K     LC_surfPix_210K     LC_surfkm2_235K     LC_surfkm2_220K     LC_surfkm2_210K     LC_surfkm2_200K
+	header_col3 = lunit.readline()   #
+	
+	for head in Headers:
+		print(head)
+	##########################
 
 	data = []
 	iMCS = -1
@@ -239,11 +231,11 @@ def load_toocan_mcsmip(FileTOOCAN):
 			data[iMCS].INT_surfcumkm2_241K	= float(Values[25]) 	# integrated cumulated surface for a 235K threshold of the convective system during its life cycle (km2)		
 			data[iMCS].INT_classif_JIRAK    = float(Values[26]) 	# classif jirak
 
-			data[iMCS].INT_Succ_40000km2    = int(Values[27])
-			data[iMCS].INT_surfprecip_2mmh  = int(Values[28])
-			data[iMCS].INT_minPeakPrecip    = int(Values[29])
-			data[iMCS].INT_totalRainVolume  = int(Values[30])
-			data[iMCS].INT_PF_maxAREA_0mmh  = int(Values[31])
+			data[iMCS].INT_Succ_40000km2    = float(Values[27])
+			data[iMCS].INT_surfprecip_2mmh  = float(Values[28])
+			data[iMCS].INT_minPeakPrecip    = float(Values[29])
+			data[iMCS].INT_totalRainVolume  = float(Values[30])
+			data[iMCS].INT_PF_maxAREA_0mmh  = float(Values[31])
 			data[iMCS].INT_classif_MCS      = int(Values[32])
 
 			data[iMCS].clusters = MCS_Lifecycle()
@@ -254,33 +246,33 @@ def load_toocan_mcsmip(FileTOOCAN):
 			# Read the parameters of the convective systems 
 			#along their life cycles
 			##################################################
-			data[iMCS].clusters.QCgeo_IRimage.append(int(Values[0]))	    			# quality control on the Infrared image
+			data[iMCS].clusters.QCgeo_IRimage.append(int(Values[0]))	    		# quality control on the Infrared image
 			data[iMCS].clusters.LC_tbmin.append(float(Values[1]))	    			# min brightness temperature of the convective system at day TU (K)
 			data[iMCS].clusters.LC_tbavg_241K.append(float(Values[2]))	    		# average brightness temperature of the convective system at day TU (K) 
-			data[iMCS].clusters.LC_tbavg_210K.append(float(Values[3]))             # min brightness temperature of the convective system at day TU (K)
+			data[iMCS].clusters.LC_tbavg_210K.append(float(Values[3]))              # min brightness temperature of the convective system at day TU (K)
 			data[iMCS].clusters.LC_tbavg_200K.append(float(Values[4]))	    	    # min brightness temperature of the convective system at day TU (K)
-			data[iMCS].clusters.LC_tb_90th.append(float(Values[5]))	    		# min brightness temperature of the convective system at day TU (K)
+			data[iMCS].clusters.LC_tb_90th.append(float(Values[5]))	    			# min brightness temperature of the convective system at day TU (K)
 			data[iMCS].clusters.LC_UTC_time.append(int(Values[6]))	    			# day TU 
-			data[iMCS].clusters.LC_localtime.append(int(Values[7]))	    		# local hour (h)
-			data[iMCS].clusters.LC_lon.append(float(Values[8]))	    			# longitude of the center of mass (°)
-			data[iMCS].clusters.LC_lat.append(float(Values[9]))	    			# latitude of the center of mass (°)
+			data[iMCS].clusters.LC_localtime.append(int(Values[7]))	    			# local hour (h)
+			data[iMCS].clusters.LC_lon.append(float(Values[8]))	    				# longitude of the center of mass (°)
+			data[iMCS].clusters.LC_lat.append(float(Values[9]))	    				# latitude of the center of mass (°)
 			data[iMCS].clusters.LC_x.append(int(Values[10]))		    			# column of the center of mass (pixel)
 			data[iMCS].clusters.LC_y.append(int(Values[11]))		    			# line of the center of mass(pixel)
 			data[iMCS].clusters.LC_velocity.append(float(Values[12]))	    		# instantaneous velocity of the center of mass (m/s)
-			data[iMCS].clusters.LC_sminor_241K.append(float(Values[13]))	    #
-			data[iMCS].clusters.LC_smajor_241K.append(float(Values[14]))	    #
-			data[iMCS].clusters.LC_ecc_241K.append(float(Values[15]))  	#
-			data[iMCS].clusters.LC_orientation_241K.append(float(Values[16]))   	#
-			data[iMCS].clusters.LC_sminor_220K.append(float(Values[17]))	    #
-			data[iMCS].clusters.LC_smajor_220K.append(float(Values[18]))	    #
-			data[iMCS].clusters.LC_ecc_220K.append(float(Values[19]))  	#
-			data[iMCS].clusters.LC_orientation_220K.append(float(Values[20]))   	#
-			data[iMCS].clusters.LC_surfPix_241K.append(int(Values[21]))	    	# surface of the convective system at time day TU (pixel)
-			data[iMCS].clusters.LC_surfPix_210K.append(int(Values[22]))	    	# surface of the convective system at time day TU (pixel)
-			data[iMCS].clusters.LC_surfkm2_241K.append(float(Values[23]))  		# surface of the convective system for a 235K threshold
-			data[iMCS].clusters.LC_surfkm2_220K.append(float(Values[24]))  		# surface of the convective system for a 200K threshold
-			data[iMCS].clusters.LC_surfkm2_210K.append(float(Values[25]))  		# surface of the convective system for a 210K threshold
-			data[iMCS].clusters.LC_surfkm2_200K.append(float(Values[26]))  		# surface of the convective system for a 220K threshold
+			data[iMCS].clusters.LC_sminor_241K.append(float(Values[13]))	 
+			data[iMCS].clusters.LC_smajor_241K.append(float(Values[14]))	 
+			data[iMCS].clusters.LC_ecc_241K.append(float(Values[15]))
+			data[iMCS].clusters.LC_orientation_241K.append(float(Values[16])) 
+			data[iMCS].clusters.LC_sminor_220K.append(float(Values[17]))	 
+			data[iMCS].clusters.LC_smajor_220K.append(float(Values[18]))	 
+			data[iMCS].clusters.LC_ecc_220K.append(float(Values[19]))
+			data[iMCS].clusters.LC_orientation_220K.append(float(Values[20])) 
+			data[iMCS].clusters.LC_surfPix_241K.append(int(Values[21]))	    		# surface of the convective system at time day TU (pixel)
+			data[iMCS].clusters.LC_surfPix_210K.append(int(Values[22]))	    		# surface of the convective system at time day TU (pixel)
+			data[iMCS].clusters.LC_surfkm2_241K.append(float(Values[23]))  			# surface of the convective system for a 241K threshold
+			data[iMCS].clusters.LC_surfkm2_220K.append(float(Values[24]))  			# surface of the convective system for a 220K threshold
+			data[iMCS].clusters.LC_surfkm2_210K.append(float(Values[25]))  			# surface of the convective system for a 210K threshold
+			data[iMCS].clusters.LC_surfkm2_200K.append(float(Values[26]))  			# surface of the convective system for a 200K threshold
 
 			data[iMCS].clusters.LC_surfprecip_2mmh.append(float(Values[27]))
 			data[iMCS].clusters.LC_PF_rainrate.append(float(Values[28]))
@@ -291,5 +283,5 @@ def load_toocan_mcsmip(FileTOOCAN):
 			data[iMCS].clusters.LC_PF_AREA_5mmh.append(float(Values[33]))
 			data[iMCS].clusters.LC_PF_AREA_10mmh.append(float(Values[34]))
 
-	lunit.close()
+	lunit.close()    
 	return data    

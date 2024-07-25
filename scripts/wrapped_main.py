@@ -25,28 +25,25 @@ sys.path.append(workdir)
 hdlr = handler.Handler(settings_path)
 cs = casestudy.CaseStudy(hdlr, overwrite = True ,verbose = True)
 gr = grid.Grid(cs, fast = True, overwrite= True, verbose_steps = False, verbose = False)
-# jd.prec['mean_Prec_cond_50'] = jd.prec["cond_alpha_50_Prec"] / jd.prec["Sigma_cond_alpha_50_Prec"]
-# jd.prec.to_netcdf("/scratchx/mcarenso/tempest/DYAMOND_SAM_post_20_days_Tropics/prec2.nc")
 
 if __name__ == '__main__':
-    # 1st batch 
+    # # # 1st batch 
     # gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
     # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
     # gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
-    gr.compute_funcs_for_var_id("sst", overwrite_var_id=True)
+    
+    # print("Storm tracking clouds")
+    # st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = True, overwrite = False)
+    # print("Storm tracking mcs")
+    # st = storm_tracker.StormTracker(gr, label_var_id = "MCS_Feng", overwrite_storms = True, overwrite = False)
 
     # 2nd batch
-    # gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
-    # gr.compute_funcs_for_var_id("MCS_cond_Prec_15")
-    # gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
-    # gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
+    gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("MCS_cond_Prec_15")
+    gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
+    gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
+    st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
 
-    #
-
-
-## post 1st batch 
-# st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = True, overwrite = False)
-# st = storm_tracker.StormTracker(gr, label_var_id = "MCS_Feng", overwrite_storms = True, overwrite = False)
-
-## post 2nd batch
-# st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
+    cloud_types = ["clouds_cond_prec_15", "vdcs_cond_prec_15", "mcs_cond_prec_15"]
+    for cloud_type in cloud_types:
+        gr.build_cloud_intersect(cloud_type, coverage_threshold=0.5)

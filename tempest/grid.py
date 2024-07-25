@@ -25,9 +25,9 @@ class Grid():
         ## Get the region borders
         self.n_lat = self.casestudy.lat_slice.stop - self.casestudy.lat_slice.start
         self.n_lon = self.casestudy.lon_slice.stop - self.casestudy.lon_slice.start
-        # here latitude -30 is 
-        self.lat_global = np.linspace(-29.5, 29.5, self.n_lat) # override box settings, carefull of behaviour
-        self.lon_global = np.linspace(0.5, 359.5, self.n_lon)
+        # sub and add 0.5 makes it centered on middle of gridpoint. 
+        self.lat_global = np.linspace(self.casestudy.lat_slice.start+0.5, self.casestudy.lat_slice.stop-0.5, self.n_lat) 
+        self.lon_global = np.linspace(self.casestudy.lon_slice.start+0.5, self.casestudy.lon_slice.stop-0.5, self.n_lon) 
         ## Bool for running a quicker computation (can multiply by x2 or x8 depending on the function)
         self.fast = fast
         self.simpler_grid = simpler_grid
@@ -50,7 +50,8 @@ class Grid():
         #### !!!!!!!!!!!!!!!!!!!!!!
 
         self.settings = casestudy.settings
-
+        self.get_landmask()
+        
     def _make_simple_grid(self):
         print("Making simpler grid")
         dir = self.settings['DIR_DATA_2D_IN']
@@ -421,7 +422,7 @@ class Grid():
 
     def get_landmask(self):
         # file = self.get_var_ds_file("LANDMASK")
-        file = "/scratchx/mcarenso/tempest/DYAMOND_SAM_post_20_days_Tropics/landmask.nc" ## try to bypass to adapt to other sim where no corresponding landmask is available
+        file = "/scratchx/mcarenso/tempest/landmask.nc" ## try to bypass to adapt to other sim where no corresponding landmask is available
         if not os.path.exists(file):
             print("Creating Earth (rough borders)")
             #arbitratry choice here, corresponds to i_t = 960
@@ -449,7 +450,10 @@ class Grid():
             if missing_coordinates:
                 # Il est corrompu on dirait... ROBIN ALED
                 print(f"The dataset is missing the following coordinates: {missing_coordinates}")
-                
+        self.mask_ocean  = ds.sel(lat_global=self.casestudy.lat_slice).Landmask == 0 ## this fucker is not compatible with -180, 180...
+        self.mask_ocean = self.mask_ocean.values[:,:,np.newaxis]
+        self.mask_land = ~self.mask_ocean
+        self.mask_all = np.logical_or(self.mask_ocean, self.mask_land)
         return ds
                 
 # These are super unclear but I got used to it..
@@ -465,7 +469,8 @@ class Grid():
         if var_id == "Prec" or "Prec_lowRes":
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
             funcs = ["cond_alpha_00", "cond_alpha_01", "cond_alpha_05", "cond_alpha_10","cond_alpha_20",  "cond_alpha_25", "cond_alpha_33", "cond_alpha_40",
-                     "cond_alpha_50", "cond_alpha_60", "cond_alpha_67", "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_99",
+                     "cond_alpha_50", "cond_alpha_60", "cond_alpha_67", "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_95",
+                     "cond_alpha_97", "cond_alpha_99",
                      "convective_01", "convective_02", "convective_03", "convective_04", "convective_05", "convective_06", "convective_08", "convective_10", 
                      "convective_12", "convective_15", "convective_20","convective_25", "convective_30", "convective_40", "convective_50", "max"] 
                      ### CAREFULL HERE, max mean (or single_timestep_regridding funcs must always be behind daily ones)
@@ -1048,3 +1053,37 @@ class Grid():
             return False
 
         return True
+    
+    def build_cloud_intersect(self, cloud_type, coverage_threshold=0.5):
+        """
+        Makes CS overlap bool map with  cond_Prec_85
+        """
+        cloud_types = ["clouds_cond_prec_15", "vdcs_cond_prec_15", "mcs_cond_prec_15"]
+        assert cloud_type in cloud_types
+        cloud_intersect_var_id = "intersection_"+cloud_type
+        
+        sigma_85 = self.get_var_id_ds("Prec").Sigma_cond_alpha_85_Prec
+        cs_cond = self.get_var_id_ds(cloud_type)
+        sigma_cs = cs_cond.Rel_surface.sum(axis = 3)
+        cs_cond[cloud_intersect_var_id] = sigma_cs/sigma_85
+        bool_covered = cs_cond[cloud_intersect_var_id]>coverage_threshold
+        cs_cond["intersection_over_half_"+cloud_intersect_var_id] = bool_covered ## add this 
+        mcs_cond_file = self.get_var_ds_file(cloud_type)
+        os.remove(mcs_cond_file)
+        cs_cond.to_netcdf(mcs_cond_file)
+        
+    def make_region_mask(self, min_lat, max_lat, min_lon, max_lon, pre_mask = True):
+        """
+        # warmpool = make_region_mask(0, 25, 125, 185, pre_mask = self.mask_ocean)
+        # indian_ocean = make_region_mask(-15, 10, 50, 100, pre_mask = self.mask_ocean)
+        # rest_ocean = np.logical_and(~warmpool, self.mask_ocean)
+        """
+        array_shape = (60, 360, 30) # 40 days in this sim
+        # Combine the masks along each dimension
+        mask = np.zeros(array_shape, dtype=bool)
+        mask[min_lat+30:max_lat+30, min_lon:max_lon, :] = True
+        mask = np.logical_and(mask, pre_mask)
+        
+        return mask
+
+

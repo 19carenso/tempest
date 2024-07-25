@@ -71,40 +71,38 @@ class JointDistribution():
         
         self.overwrite = overwrite
 
-        cwd = os.getcwd()
-        rel_dir_out = self.settings["DIR_OUT"]
-        abs_dir_out = os.path.join(cwd, rel_dir_out)
-        self.dir_out = os.path.join(abs_dir_out, self.name)
-        if not os.path.exists(self.dir_out):
-            print("First instance of this Joint Distribution, so setting overwrite to true")
-            os.makedirs(self.dir_out)
-            self.overwrite = True
 
+        abs_dir_out = self.settings["DIR_DATA_OUT"]
+        # abs_dir_out = os.path.join(homedata_tempest_path, rel_dir_out)
+        self.dir_out = os.path.join(abs_dir_out, self.name)
         # Retrieves self.dist1 and self.dist2
         self.get_distribs()
         self.bins1 = self.dist1.bins
         self.bins2 = self.dist2.bins
-
-        jd_name = self.dist1.name +'_joint_'+self.dist2.name
-        self.jd_path = os.path.join(self.dir_out, jd_name)
+        
+        mask_str = "special_mask" if type(dist_mask) is not bool else str(dist_mask)
+        self.jd_name = f"{self.dist1.name}_joint_{self.dist2.name}_nbpd_{nbpd}_nd_{nd}_ dist_mask_"+mask_str
+        self.jd_path = os.path.join(self.dir_out, self.jd_name)
+        
         if not os.path.exists(self.jd_path):
             os.makedirs(self.jd_path)
-
-        if overwrite : 
+            self.overwrite  = True
+            print("First instance of that distrib so Overwrite gets to true")
+            
+        if self.overwrite: 
             if self.verbose : print("Overwrite set to true, so computing basics and saving them")
-            self.density = None
-            self.bin_locations_stored = False
-
-            self.compute_distribution(self.sample1, self.sample2)
-            self.norm_density = self.compute_normalized_density(self.sample1, self.sample2)
-            
-            self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()
-            
-            self.save_basics_to_npy()
+            self.compute_and_save_to_npy()
         else : 
             print("Overwrite set to false so loading basics attributes from .npy")
             self.load_from_npy()
-        
+
+        ## Fed up of errors
+        try :
+            self.density
+        except AttributeError as e:
+            print("Provoked loading error so so foarcing loading")
+            self.compute_and_save_to_npy()
+
     
         ## Make a class out of this so that it only has to be loaded once (super long like 30sec to 2mins....)
         if storm_tracker is not None:
@@ -174,10 +172,18 @@ class JointDistribution():
                 self.dist1 = pickle.load(file)
             with open(path_dist2, 'rb') as file:
                 self.dist2 = pickle.load(file)
-            print("Distribs loaded")
+            print("Simple distribs loaded")
         
         else : 
             print("Overwrite set to false, but not distribs found !")
+
+    def compute_and_save_to_npy(self):
+            self.density = None # why ? 
+            self.bin_locations_stored = False
+            self.compute_distribution(self.sample1, self.sample2)
+            self.norm_density = self.compute_normalized_density(self.sample1, self.sample2)
+            self.digit_3d_1, self.digit_3d_2 = self.compute_conditional_locations()    
+            self.save_basics_to_npy()
 
     def save_basics_to_npy(self):
         """
@@ -186,6 +192,7 @@ class JointDistribution():
         """
         self.npy_attributes = {
             'bincount': self.bincount,
+            'density': self.density,
             'norm_density': self.norm_density,
             'digit_3d_1': self.digit_3d_1,
             'digit_3d_2': self.digit_3d_2
@@ -207,7 +214,7 @@ class JointDistribution():
                 attr_name = os.path.splitext(file)[0]
                 file_path = os.path.join(self.jd_path, file)
                 attr_value = np.load(file_path)
-                setattr(self, attr_name, attr_value)
+                self.__setattr__(attr_name, attr_value) #### WEIRED BUG ON EARTH THIS HAS NEVER WORKED IM MAAAAAAAAD
                 self.npy_attributes[attr_name] = attr_value
 
     def format_dimensions(self,sample):
@@ -494,14 +501,14 @@ class JointDistribution():
         ax.set_ylabel(r"km-scale")
         ax.set_title(title)
 
-        # I think this doesnt' work, uselessly
-        extent = (self.dist1.ranks[0], self.dist1.ranks[-1], self.dist2.ranks[0], self.dist2.ranks[-1])
+        # # I think this doesnt' work, uselessly
+        # extent = (self.dist1.ranks[0], self.dist1.ranks[-1], self.dist2.ranks[0], self.dist2.ranks[-1])
         # -- Density
         
 
         # -- Masks multiscale categories and colorbar
         if mask : 
-            pcm = show_joint_histogram(ax_show, np.zeros_like(Z), scale=scale, vmin=vbds[0], vmax=vbds[1], extent = extent, cmap=cmap)
+            pcm = show_joint_histogram(ax_show, np.zeros_like(Z), scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap) #extent = extent
             pcm_mask = ax_show.imshow(self.mask_show.T,alpha=1,origin='lower')
             # cb = fig.colorbar(pcm_mask, ax=ax_show)
             # cb.set_label("Multiscale categories") 
@@ -513,7 +520,7 @@ class JointDistribution():
             cb.set_ticklabels(['Only\nkm-scale', 'Mostly\nkm-scale', 'Mostly\n1°x1day', 'Only\n1°x1day'])
 
         else : 
-            pcm = show_joint_histogram(ax_show, Z[:,:], scale=scale, vmin=vbds[0], vmax=vbds[1], extent = extent, cmap=cmap)
+            pcm = show_joint_histogram(ax_show, Z[:,:], scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap) #extent = extent,
             cb = fig.colorbar(pcm, ax=ax_show)
             cb.set_label("Normalized density" ) 
 
@@ -989,7 +996,19 @@ class JointDistribution():
         
         return bincount_where_var_cond, bincount_reduced_prec
      
-    def compute_conditional_data_over_density(self, data = None, mask = None, plot_func = np.nanmean):         
+    def compute_conditional_data_over_density(self, data = None, mask = "all", plot_func = np.nanmean):  
+        """
+        mask (str) : all, ocean, land
+        """
+        if mask == "all":
+            mask = np.repeat(self.grid.mask_all, 30, axis=2) 
+        elif mask == "ocean":
+            mask = np.repeat(self.grid.mask_ocean, 30, axis=2) 
+        elif mask == "land":
+            mask = np.repeat(self.grid.mask_land, 30, axis=2) 
+        elif type(mask) is not str:
+            print("special mask applied for conditional density")
+            
         var_days = list(data.days.values)  
         prec_days = list(self.prec.days.values)  
         days_filter = np.array([prec_day in var_days for prec_day in prec_days])
@@ -1014,11 +1033,20 @@ class JointDistribution():
      
     def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, title = "No title :( ", norm = None, plot_func = np.nanmean, vbds = (None, None), fig = None, ax = None, density = None):
         key = func+'_'+var_id
-
-        if density is None : 
-            var_over_density = self.get_var_id_density_over_jdist(var_id, func, mask = mask, plot_func = np.nanmean) #more a da than ds but whatever
+        densities_path = os.path.join(self.settings["DIR_DATA_OUT"], f'{self.name}/densities/')
+        if not os.path.exists(densities_path):
+            os.makedirs(densities_path)
+        if type(mask) is str:
+            density_filename = f'{self.name}/densities/{key}_plot_func_{plot_func.__name__}_mask_{mask}_nbpd_{self.nbpd}_nd_{self.nd}.pkl'
         else : 
-            var_over_density = density
+            density_filename = f'{self.name}/densities/{key}_plot_func_{plot_func.__name__}_special_mask_nbpd_{self.nbpd}_nd_{self.nd}.pkl'
+        density_filepath = os.path.join(self.settings["DIR_DATA_OUT"], density_filename)
+
+        if os.path.exists(density_filepath): 
+            var_over_density = self.load_density(density_filepath)            
+        else : 
+            var_over_density = self.get_var_id_density_over_jdist(var_id, func, mask = mask, plot_func = plot_func) 
+            self.save_density(var_over_density, density_filepath)
             
         if fig is None : 
             fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4.71))
@@ -1035,8 +1063,8 @@ class JointDistribution():
         else :  
             ds_var = self.grid.get_var_id_ds(var_id).sortby("days")[key]
             
-        var_days = list(ds_var.days.values)
-        ds_var = ds_var.sel(days = var_days) #.where(mask) # redundant ? 
+        # var_days = list(ds_var.days.values)
+        # ds_var = ds_var.sel(days = var_days) #.where(mask) # redundant ? 
         var_over_density = self.compute_conditional_data_over_density(ds_var, mask = mask, plot_func = plot_func) #more a da than ds but whatever
         
         return var_over_density 
@@ -1172,6 +1200,43 @@ class JointDistribution():
 
         return fig, ax, ax_show
 
+    def save_density(self, density, density_filepath):
+        with open(density_filepath, 'wb') as f:
+            pickle.dump(density, f)
+
+    def load_density(self, density_filepath):
+        with open(density_filepath, 'rb') as f:
+            return pickle.load(f)   
+            
+            
+
+    def mutual_information(self, rank_threshold_int=20):
+        """
+        Look at CRPS Score (Felix Rein slides of WCO4) 
+        CRPS =UNC + MCB - DSC 
+        Uncertainty + Miscallibration - Discrimitation 
+    
+        Isotonical distribution regression to post process forecast (simple?)
+        """
+        mi_pos = 0
+        mi_neg = 0
+        l1, l2 = len(self.bins1)-1, len(self.bins2)-1
+        bin_widths1=np.diff(self.dist1.bins)
+        bin_widths2=np.diff(self.dist2.bins)
+        bin_areas = np.outer(bin_widths1,bin_widths2)
+        for i in range(rank_threshold_int, l1):
+            for j in range(rank_threshold_int, l2):
+                if self.norm_density[i,j] != 0 : # and (i > rank_threshold_int or j > rank_threshold_int):
+                    mi_ij = self.density[i,j]*np.log(self.norm_density[i,j])*bin_areas[i,j]
+                    if mi_ij >0:
+                        mi_pos+=mi_ij
+                    else:
+                        mi_neg+=mi_ij
+                else : 
+                    pass
+                    
+        return mi_pos+mi_neg, mi_pos, mi_neg
+    
     #     ## TODO catch var_unit somehow for cleaner labels
     #     key = func+'_'+var_id
     #     var_ds = self.grid.get_var_id_ds(var_id)

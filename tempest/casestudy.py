@@ -61,7 +61,7 @@ class CaseStudy():
                 self.var_names_2d = self._load_var_id_in_data_in(True)
                 self.var_names_3d = self._load_var_id_in_data_in(False)
 
-            elif self.model in ['DYAMOND_II_Winter_SAM', 'SAM_lowRes', "OBS_lowRes" ,"IFS_lowRes", "NICAM_lowRes", "UM_lowRes", "ARPEGE_lowRes", "MPAS_lowRes", "FV3_lowRes"]:
+            elif "lowRes" in self.model:
                 self.var_names_2d = self._read_var_id_in_data_in()
                 self.var_names_3d = []
             

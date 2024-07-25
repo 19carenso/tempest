@@ -31,29 +31,12 @@ REL_TABLE: "input/relation_2_table_UTC_dyamond_segmentation.csv"
 DIR_STORM_TRACK_TB_FENG: '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/235K/TOOCAN_FENG/TOOCAN_v2.08/GLOBAL/2016/'
 DIR_STORM_TRACKING_TB_FENG: '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/235K/TOOCAN_FENG/TOOCAN_v2.08/GLOBAL/2016/FileTracking/'
 
-# Colors and Bounds
-clim_specs:
-  prec: [1e-2, 1e2]  # mm (in 30mn)
-  PW: [10, 70]  # mm
-
-cmap_specs:
-  prec: 'plt.cm.ocean_r'  # alternative plt.cm.bone_r
-  PW: 'plt.cm.RdBu'
-  mcs: 'plt.cm.get_cmap("Accent", 10)'
-
-norm_specs:
-  prec:
-    type: LogNorm
-    vmin: 0.01
-    vmax: 100.0
-  PW: null
-
 # Regions of Analysis
-BOX: [-30, 30, 0, 360] # [lat_min, lat_max, lon_min, lon_max]
+BOX: [-15, 30, 0, 360] # [lat_min, lat_max, lon_min, lon_max]
 
 ## Set init time to 526 for a test case fast debug
 ## normal set up is 480 here 
-TIME_RANGE: [480, 1920] # [start, end] in timestep (so rows) of dir_data_in
+TIME_RANGE: [480, 1919] # [start, end] in timestep (so rows) of dir_data_in
 NATIVE_TIMESTEP: 1800 # number of time units from simulation, in a output timestep 
 
 # Feng avoids the 10 first day. I don't see anything weird in Precac except for the 10 first timestep

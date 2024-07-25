@@ -13,7 +13,7 @@ import gc
 import warnings
 # from .toocan_loaders.load_toocan import load_toocan
 from .toocan_loaders.load_toocan_sam import load_toocan_sam
-from .toocan_loaders.load_toocan_mcsmip import load_toocan_mcsmip
+from .toocan_loaders.load_toocan_mcsmip import load_TOOCAN
 
 import warnings
 from scipy.optimize import OptimizeWarning
@@ -53,7 +53,11 @@ class StormTracker():
         self.i_t_end = self.settings["TIME_RANGE"][1]
         # get storm tracking data
         if self.verbose : print("Loading storms...")
-        self.ds_storms, self.file_storms = self.load_storms_tracking(overwrite_storms) #, self.label_storms, self.dict_i_storms_by_label
+        if True :
+            self.ds_storms, self.file_storms = self.load_storms_tracking(overwrite_storms) #, self.label_storms, self.dict_i_storms_by_label
+        else : 
+            self.ds_storms = self.load_storms_tracking_from_netcdf()
+                
         if self.verbose : print(f"Time elapsed for loading storms: {time.time() - start_time:.2f} seconds")
     
         ## test and incubate in a func
@@ -75,10 +79,34 @@ class StormTracker():
                     ds_storms[grw_var_name] = grw_data_var
                 self.save_storms(ds_storms)
     
+    # def load_storms_tracking_from_netcdf(self):
+    #     # dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
+    #     dir_storms_netcdf = self.settings["DIR_STORM_TRACKING_NETCDF"]
+    #     paths = glob.glob(os.path.join(dir_storms_netcdf, '*.nc'))
+    #     model_name = self.settings["MODEL"].split("_")[0]
+    #     if model_name == "OBS" : model_name = "OBSv7" #bc V6 still pollutes
+    #     dataset_paths = []
+    #     for path in paths : 
+    #         path_model = path.split("-")[1]
+    #         if path_model == model_name:
+    #             dataset_paths.append(path)
+    #     ds_storms = xr.open_mfdataset(dataset_paths, combine = 'nested')
+        
+        # ds1, ds2 = xr.align(datasets[0], datasets[1], join = 'outer') #supposedly only two in this experiment, adapth with zip and ** otherwise
+        # ds1_stacked = ds1.stack(time_DCS = ("time", "DCS"))
+        # ds2_stacked = ds2.stack(time_DCS= ("time", "DCS"))
+        # concat_ds = xr.concat([ds1_stacked, ds2_stacked], dim="time_DCS")
+        # ds_storms = concat_ds.unstacked('time_DCS')
+        # ds_storms = xr.concat(datasets, dim = 'time')
+        
+        # return ds_storms  
+    
     def load_storms_tracking(self, overwrite):
         ## Make it a netcdf so that we don't struggle with loading it anymore
         dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
         file_storms = os.path.join(dir_out, "storms_"+self.label_var_id+".nc")
+        model_name = self.settings["MODEL"].split("_")[0]
+
         if os.path.exists(file_storms) and not overwrite:
             if self.verbose : print("loading storms from netcdf")
             with open(file_storms, 'rb') as file:
@@ -90,33 +118,38 @@ class StormTracker():
             # For dyamond 2 there are many filetracking for other models in the dir_storm
             toocan_paths = []
             for path in paths : 
-                if "lowRes" in self.settings["MODEL"]:
-                    model_name = self.settings["MODEL"][:-7]
-                    if model_name in path : 
-                        toocan_paths.append(path)
-                elif "SAM" in self.settings["MODEL"]: ## this is only for sam highres now
+                path_model = path.split("-")[1]
+                if path_model == model_name:
+                    toocan_paths.append(path)
+                    
+                elif "SAM" in self.settings["MODEL"] and "4km" in self.settings["MODEL"]: ## this is only for sam highres now
                     if "SAM" in path :
                         toocan_paths.append(path)
 
+            ## not the same loader here 
             if self.settings["MODEL"] == "DYAMOND_SAM_post_20_days" or self.settings["MODEL"] == "SAM_4km_30min_30d":
                 storms = load_toocan_sam(toocan_paths[0])+load_toocan_sam(toocan_paths[1])
             elif "lowRes" in self.settings["MODEL"]:
-                storms = load_toocan_mcsmip(toocan_paths[0])+load_toocan_mcsmip(toocan_paths[1])
-            # weird bug of latmin and lonmax being inverted ! 
+                storms = load_TOOCAN(toocan_paths[0])+load_TOOCAN(toocan_paths[1])
+
+            # Extract the relevant variables
+
+            ## differentiating clouds from vdcs here 
             filtered_storms = []
+            lat_min, lat_max = self.settings["BOX"][0], self.settings["BOX"][1]
             for storm in storms:
-                # print(storm)              
-                # if self.settings["MODEL"] == "DYAMOND_SAM_post_20_days" or self.settings["MODEL"] == "SAM_4km_30min_30d" : # I want to avoid the spin off here + I use specifi time knowledge
-                    # Check the condition based on INT_UTC_timeEnd
                 if storm.INT_UTC_timeEnd / self.Utime_step >= self.i_t_start:
+                    ## chat codes heres 
+                    lat_in_range = any(lat_min-2 <= lat <= lat_max+2 for lat in storm.clusters.LC_lat)
+                    if lat_in_range:
                     # Add the storm to the new list if the condition is met
-                    if "lowRes" in self.settings["MODEL"] and self.label_var_id == "MCS_Feng":
-                        if storm.INT_classif_MCS : filtered_storms.append(storm)
-                    elif self.label_var_id == "vDCS":
-                        if  (storm.INT_TbMin<210) & (storm.INT_duration > 2.5) & (storm.INT_velocityAvg < 20):
+                        if "lowRes" in self.settings["MODEL"] and self.label_var_id == "MCS_Feng":
+                            if storm.INT_classif_MCS : filtered_storms.append(storm)
+                        elif self.label_var_id == "vDCS":
+                            if  (storm.INT_TbMin<210) & (storm.INT_duration > 2.5) & (storm.INT_velocityAvg < 20):
+                                filtered_storms.append(storm)
+                        else : 
                             filtered_storms.append(storm)
-                    else : 
-                        filtered_storms.append(storm)
 
             # Update the original list with the filtered storms
             storms = filtered_storms

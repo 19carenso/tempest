@@ -35,7 +35,7 @@ class Handler():
         var_2d = grid.casestudy.var_names_2d
         var_3d = grid.casestudy.var_names_3d
         new_var_funcs = grid.casestudy.new_var_functions
-        
+
         if var_id in new_var_names:
             if hasattr(self, new_var_funcs[var_id]):
                 load_func = getattr(self, new_var_funcs[var_id])
@@ -71,22 +71,28 @@ class Handler():
                     # old # var = xr.open_dataset(filepath_var).sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).isel(time=0, z=z) #, chunks = chunks)
                     var = xr.open_dataset(temp_file)
 
-            elif self.settings["MODEL"] in ["DYAMOND_II_Winter_SAM", "SAM_lowRes", "IFS_lowRes", "NICAM_lowRes", "UM_lowRes", "ARPEGE_lowRes", "MPAS_lowRes", "FV3_lowRes"]:
-                filename_var = self.get_dyamond_2_filename_from_i_t(i_t)
+            elif "OBS" in self.settings["MODEL"]:
+                if "v6" in self.settings["MODEL"]:
+                    filename_var  = self.get_mcsmip_dyamond_obs_filename_from_i_t(i_t)
+                else : 
+                    filename_var  = self.get_mcsmip_dyamond_obsv7_filename_from_i_t(i_t)
                 filepath_var = os.path.join(path_data_in, filename_var)
                 var = xr.open_dataset(filepath_var)[var_id][0].sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).load() #lon is useless but lat important because otherwise its -60 60
             
-            elif self.settings["MODEL"] in ["OBS_lowRes"]:
-                filename_var  = self.get_mcsmip_dyamond_obs_filename_from_i_t(i_t)
+            elif self.settings['MODEL'][-7:] == "_lowRes" :
+                print("MCSMIP Model prec")
+                filename_var = self.get_dyamond_2_filename_from_i_t(i_t)
                 filepath_var = os.path.join(path_data_in, filename_var)
                 var = xr.open_dataset(filepath_var)[var_id][0].sel(lon=grid.casestudy.lon_slice,lat=grid.casestudy.lat_slice).load() #lon is useless but lat important because otherwise its -60 60
+            else : 
+                print("You failed to get the var, you'll get a bug ! ")
             return var
          
     def load_seg(self, grid, i_t):
         path_toocan = self.get_filename_classic(i_t) ## There is the differences
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(-30, 30))# because otherwise goes to -40, 40
+            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(self.settings["BOX"][0], self.settings["BOX"][1]))# because otherwise goes to -40, 40
         return img_toocan
 
     def load_conv_seg(self, grid, i_t):
@@ -94,7 +100,7 @@ class Handler():
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(-30, 30))# because otherwise goes to -40, 40
+            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(self.settings["BOX"][0], self.settings["BOX"][1]))# because otherwise goes to -40, 40
 
         img_labels = np.unique(img_toocan)[:-1]
 
@@ -153,7 +159,7 @@ class Handler():
         path_toocan = self.get_filename_tb_feng(i_t) ## There is the differences
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(-30, 30))
+            img_toocan = xr.open_dataset(path_toocan, engine='netcdf4').cloud_mask.sel(latitude = slice(self.settings["BOX"][0], self.settings["BOX"][1]))
         return img_toocan
 
     def i_t_from_utc(self, utc):
@@ -414,20 +420,41 @@ class Handler():
         
         if self.settings["MODEL"] == "DYAMOND_II_Winter_SAM":
             season_path = 'pr_rlut_sam_winter_' 
-        elif self.settings["MODEL"] == "SAM_lowRes":
+        elif self.settings["MODEL"] == "SAM_lowRes" or self.settings["MODEL"] == "SAM_Summer_lowRes":
             season_path = 'pr_rlut_sam_summer_'
-        elif self.settings["MODEL"] == "IFS_lowRes":
+        elif self.settings["MODEL"] == "IFS_lowRes" or self.settings["MODEL"] == "IFS_Summer_lowRes":
             season_path = 'pr_rlut_ifs_summer_'
-        elif self.settings["MODEL"] == "NICAM_lowRes":
+        elif self.settings["MODEL"] == "NICAM_lowRes" or self.settings["MODEL"] == "NICAM_Summer_lowRes":
             season_path = 'pr_rlut_nicam_summer_'
-        elif self.settings["MODEL"] == "UM_lowRes":
+        elif self.settings["MODEL"] == "UM_lowRes" or self.settings["MODEL"] == "UM_Summer_lowRes":
             season_path = "pr_rlut_um_summer_"    
-        elif self.settings["MODEL"] == "ARPEGE_lowRes":
+        elif self.settings["MODEL"] == "ARPEGE_lowRes" or self.settings["MODEL"] == "ARPEGE_Summer_lowRes":
             season_path = "pr_rlut_arpnh_summer_"
-        elif self.settings["MODEL"] ==  "MPAS_lowRes":
+        elif self.settings["MODEL"] ==  "MPAS_lowRes" or self.settings["MODEL"] == "MPAS_Summer_lowRes":
             season_path = "pr_rlut_mpas_"
-        elif self.settings["MODEL"] == "FV3_lowRes":
+        elif self.settings["MODEL"] == "FV3_lowRes" or self.settings["MODEL"] == "FV3_Summer_lowRes":
             season_path = "pr_rlut_fv3_"
+        elif self.settings["MODEL"] == "SCREAMv1_lowRes" or self.settings["MODEL"] == "SCREAMv1_Summer_lowRes":
+            season_path = "olr_pcp_Summer_SCREAMv1_"
+            
+        elif self.settings["MODEL"] == "SAM_Winter_lowRes":
+            season_path = 'pr_rlut_sam_winter_'
+        elif self.settings["MODEL"] == "GEOS_Winter_lowRes":
+            season_path = 'pr_rlut_geos_winter_'
+        elif self.settings["MODEL"] == "GRIST_Winter_lowRes":
+            season_path = 'pr_rlut_grist_'
+        elif self.settings["MODEL"] == "IFS_Winter_lowRes":
+            season_path = 'pr_rlut_ecmwf_'
+        elif self.settings["MODEL"] == "UM_Winter_lowRes":
+            season_path = "pr_rlut_um_winter_"    
+        elif self.settings["MODEL"] == "ARPEGE_Winter_lowRes":
+            season_path = "pr_rlut_arpnh_winter_"
+        elif self.settings["MODEL"] == "MPAS_Winter_lowRes":
+            season_path = "pr_rlut_mpas_winter_"
+        elif self.settings["MODEL"] == "XSHiELD_Winter_lowRes":
+            season_path = "pr_rlut_SHiELD-3km_"
+        elif self.settings["MODEL"] == "SCREAMv1_Winter_lowRes":
+            season_path = "olr_pcp_Winter_SCREAMv1_"
 
         result = season_path+timestamp+'.nc'
         return result 
@@ -508,6 +535,10 @@ class Handler():
         prec = self.load_var(grid, 'pr', i_t)
         return prec
     
+    def get_precipitation(self, grid, i_t):
+        prec = self.load_var(grid, 'precipitation', i_t)
+        return prec
+    
     def get_rain(self, grid, i_t):
         prec = self.load_var(grid, 'param8.1.0', i_t)
         return prec
@@ -517,7 +548,7 @@ class Handler():
         time = self.get_winter_2_datetime_from_i_t(i_t)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').cloud_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
+            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').cloud_mask.sel(time = time, latitude = slice(self.settings["BOX"][0], self.settings["BOX"][1]))# because otherwise goes to -60, 60
         return img_toocan
     
     def read_seg_feng(self, grid, i_t):
@@ -525,7 +556,7 @@ class Handler():
         time = self.get_winter_2_datetime_from_i_t(i_t)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').mcs_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
+            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').mcs_mask.sel(time = time, latitude = slice(self.settings["BOX"][0], self.settings["BOX"][1]))# because otherwise goes to -60, 60
         return img_toocan
 
     def read_filter_vdcs_seg(self, grid, i_t):
@@ -560,7 +591,7 @@ class Handler():
         mcs_mask = self.read_seg_feng(grid, i_t)
         cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
         prec = self.load_var(grid, "Prec", i_t)
-        if self.settings["MODEL"] == 'FV3_lowRes': ## remose last lat because this specifi grid is not centered like the others
+        if "FV3" in self.settings["MODEL"] : ## remose last lat because this specifi grid is not centered like the others
             mcs_mask = mcs_mask.isel(latitude=slice(0, -1))
         mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
         del prec
@@ -587,7 +618,7 @@ class Handler():
         cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
         prec = self.load_var(grid, "Prec", i_t)
 
-        if self.settings["MODEL"] == 'FV3_lowRes': ## remose last lat because this specifi grid is not centered like the others
+        if "FV3" in self.settings["MODEL"]: ## remose last lat because this specifi grid is not centered like the others
             mcs_mask = mcs_mask.isel(latitude=slice(0, -1))
 
         mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
@@ -602,7 +633,7 @@ class Handler():
         cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
         prec = self.load_var(grid, "Prec", i_t)
 
-        if self.settings["MODEL"] == 'FV3_lowRes': ## remose last lat because this specifi grid is not centered like the others
+        if "FV3" in self.settings["MODEL"] : ## remose last lat because this specifi grid is not centered like the others
             mcs_mask = mcs_mask.isel(latitude=slice(0, -1))
         mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
         
@@ -642,35 +673,47 @@ class Handler():
         datetime = delta+date_ref
         return datetime    
     
-    def get_mcsmip_dyamond_obs_filename_from_i_t(self, i_t):
+    def get_mcsmip_dyamond_obs_filename_from_i_t(self, i_t): 
         new_date = self.get_mcsmip_dyamond_obs_datetime_from_i_t(i_t)
         timestamp = new_date.strftime("%Y%m%d%H")
         result = 'merg_'+timestamp+"_4km-pixel.nc"
         return result
+    
+    def get_mcsmip_dyamond_obsv7_filename_from_i_t(self, i_t):
+        new_date = self.get_mcsmip_dyamond_obs_datetime_from_i_t(i_t)
+        timestamp = new_date.strftime("%Y%m%d%H")
+        if "Summer" in self.settings["MODEL"]:
+            result = "olr_pcp_Summer_OBSv7_"+timestamp+".nc" # Can actually catch model name and Summer Winter from self.settings.... clean that 
+        elif "Winter" in self.settings["MODEL"]:
+            result = "olr_pcp_Winter_OBSv7_"+timestamp+".nc" # Can actually catch model name and Summer Winter from self.settings.... clean that 
+        return result
 
     def obs_prec(self, grid, i_t):
-        # previous_precac = self.load_var(grid, 'pracc', i_t-1) if i_t > 1 else None # I wonder if it's enough to catch first rain or if its removed by index management of pracc-1..
         current_precac = self.load_var(grid, 'precipitationCal', i_t)
         prec = current_precac #- previous_precac
-        # del previous_precac
         del current_precac
+        gc.collect()
+        return prec
+
+    def obsv7_prec(self, grid, i_t):
+        prec = self.load_var(grid, 'precipitation', i_t)
         gc.collect()
         return prec
     
     def obs_seg(self, grid, i_t):
         path_seg_mask = self.settings["DIR_STORM_TRACK"] 
-        time = self.get_mcsmip_dyamond_obs_datetime_from_i_t(i_t)## There is the differences
+        time = self.get_mcsmip_dyamond_obs_datetime_from_i_t(i_t)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').cloud_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
+            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').cloud_mask.sel(time = time, latitude = slice(self.settings["BOX"][0], self.settings["BOX"][1]))# because otherwise goes to -60, 60
         return img_toocan
     
     def obs_seg_feng(self, grid, i_t):
         path_seg_mask = self.settings["DIR_STORM_TRACK"] 
-        time = self.get_mcsmip_dyamond_obs_datetime_from_i_t(i_t)## There is the differences
+        time = self.get_mcsmip_dyamond_obs_datetime_from_i_t(i_t)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=xr.SerializationWarning)
-            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').mcs_mask.sel(time = time, latitude = slice(-30, 30))# because otherwise goes to -60, 60
+            img_toocan = xr.open_dataset(path_seg_mask, engine='netcdf4').mcs_mask.sel(time = time, latitude = slice(self.settings["BOX"][0], self.settings["BOX"][1]))# because otherwise goes to -60, 60
         return img_toocan
 
     def obs_filter_vdcs_seg(self, grid, i_t):

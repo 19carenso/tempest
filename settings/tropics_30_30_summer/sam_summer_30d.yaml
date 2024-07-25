@@ -3,34 +3,51 @@
 # Ideally you want one settings file per project
 
 # Basic Settings
-MODEL: 'UM_Summer_lowRes'
+MODEL: 'SAM_lowRes'
 REGION: 'Tropics'
 
 # Inner paths 
 DIR_INPUT: 'input/' 
 DIR_FIG: 'figures/' 
 DIR_OUT: 'output/'
-DIR_TEMPDATA: '/scratchx/mcarenso/tempest'
+DIR_TEMPDATA: '/homedata/mcarenso/tempest'
 
 # Where we store the data we need for the analysis, independant of model_region
-DIR_DATA_OUT: '/scratchx/mcarenso/tempest'
+DIR_DATA_OUT: '/homedata/mcarenso/tempest'
 
 # Data that are too big to be stored in your workspace
-DIR_DATA_2D_IN: '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/DYAMOND/Summer/UM/olr_pcp_instantaneous/'
+DIR_DATA_2D_IN: '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/DYAMOND/Summer/SAM/olr_pcp_instantaneous/'
 DIR_DATA_3D_IN: ''
 # Classic TOOCAN run
-DIR_STORM_TRACK: '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/TOOCAN/Summer/mcs_mask_Summer_UM.nc'  # '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/235K/TOOCAN_EMC2/TOOCAN_v2.08/GLOBAL/2016/'
+DIR_STORM_TRACK: '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/TOOCAN/Summer/mcs_mask_Summer_SAM.nc'  # '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/235K/TOOCAN_EMC2/TOOCAN_v2.08/GLOBAL/2016/'
 DIR_STORM_TRACKING: '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/TOOCAN/Summer/FileTracking_ASCII/'
-DIR_STORM_TRACKING_NETCDF : '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/TOOCAN/Summer/FileTracking_NETCDF/'
+
+# Colors and Bounds
+clim_specs:
+  prec: [1e-2, 1e2]  # mm (in 30mn)
+  PW: [10, 70]  # mm
+
+cmap_specs:
+  prec: 'plt.cm.ocean_r'  # alternative plt.cm.bone_r
+  PW: 'plt.cm.RdBu'
+  mcs: 'plt.cm.get_cmap("Accent", 10)'
+
+norm_specs:
+  prec:
+    type: LogNorm
+    vmin: 0.01
+    vmax: 100.0
+  PW: null
 
 # Regions of Analysis
-BOX: [-15, 30, -180, 180] # [lat_min, lat_max, lon_min, lon_max]
+BOX: [-30, 30, -180, 180] # [lat_min, lat_max, lon_min, lon_max]
 
 TIME_RANGE: [240, 959] # [start, end] in timestep (so rows) of dir_data_in
+
 # Feng avoids the 10 first day. I don't see anything weird in Precac except for the 10 first timestep
 
 # could be catched dynamically
-DATE_REF: {year : 2016, month : 8, day : 01} # date of the first timestep of the data
+DATE_REF: {year : 2016, month : 8, day : 01} # date of the first timestep of the data files
 NATIVE_TIMESTEP: 60 # number of time units from simulation, in a output timestep 
 
 new_var: ## These list and dict must be sorted by dependency
@@ -38,37 +55,48 @@ new_var: ## These list and dict must be sorted by dependency
   variables_id:
     [
       "Prec", 
+      "Prec_lowRes",
       "MCS_label",
       "MCS_Feng", 
       "vDCS",
+      "vDCS_no_MCS",
       "MCS_cond_Prec_15",
       "vDCS_cond_Prec_15", 
       "clouds_cond_Prec_15",
+      "sliding_MCS_cond_Prec_15",
+      "sliding_clouds_cond_Prec_15",
       "sst"
-
     ]
 
   dependencies:
     {
-      "Prec" : ["precipitation_flux"], 
+      "Prec" : ["Precac", "Precac-1"], 
+      "Prec_lowRes" : ["Prec"],
       "MCS_label" : [], 
-      "MCS_Feng" : [], 
+      "MCS_Feng" : [],
       "vDCS" : [],
+      "vDCS_no_MCS" : [],
       "MCS_cond_Prec_15" : ["MCS_Feng", "Prec"],
       "vDCS_cond_Prec_15" : ["vDCS", "Prec"],
       "clouds_cond_Prec_15" : ["MCS_label", "Prec"],
+      "sliding_MCS_cond_Prec_15" : ["MCS_Feng", "Prec"],
+      "sliding_clouds_cond_Prec_15" : ["MCS_label", "Prec"],
       "sst" : []
     }
     
   functions:
     {
-      "Prec" : "get_precipitation_flux",
+      "Prec" : "diff_precac",
+      "Prec_lowRes" : "read_lowRes_prec",
       "MCS_label" : "read_seg", 
       "MCS_Feng" : "read_seg_feng", 
       "vDCS" : "read_filter_vdcs_seg",
+      "vDCS_no_MCS" : "read_filter_vdcs_no_mcs_seg",
       "MCS_cond_Prec_15": "mcs_coverage_cond_prec_15",
       "vDCS_cond_Prec_15" : "vdcs_coverage_cond_prec_15",
       "clouds_cond_Prec_15" : "clouds_coverage_cond_Prec_15",
+      "sliding_MCS_cond_Prec_15" : "sliding_mcs_coverage_cond_prec_15",
+      "sliding_clouds_cond_Prec_15" : "sliding_clouds_coverage_cond_Prec_15",
       "sst" : "read_sst"
     }
 

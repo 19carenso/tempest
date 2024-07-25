@@ -3,17 +3,17 @@
 # Ideally you want one settings file per project
 
 # Basic Settings
-MODEL: 'NICAM_lowRes'
+MODEL: 'NICAM_Summer_lowRes'
 REGION: 'Tropics'
 
 # Inner paths 
 DIR_INPUT: 'input/' 
 DIR_FIG: 'figures/' 
 DIR_OUT: 'output/'
-DIR_TEMPDATA: '/homedata/mcarenso/tempest'
+DIR_TEMPDATA: '/scratchx/mcarenso/tempest'
 
 # Where we store the data we need for the analysis, independant of model_region
-DIR_DATA_OUT: '/homedata/mcarenso/tempest'
+DIR_DATA_OUT: '/scratchx/mcarenso/tempest'
 
 # Data that are too big to be stored in your workspace
 DIR_DATA_2D_IN: '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/DYAMOND/Summer/NICAM/olr_pcp_instantaneous/'
@@ -21,26 +21,10 @@ DIR_DATA_3D_IN: ''
 # Classic TOOCAN run
 DIR_STORM_TRACK: '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/TOOCAN/Summer/mcs_mask_Summer_NICAM.nc'  # '/bdd/MT_WORKSPACE/lgouttes/MODELS/DYAMOND/Summer/SAM/235K/TOOCAN_EMC2/TOOCAN_v2.08/GLOBAL/2016/'
 DIR_STORM_TRACKING: '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/TOOCAN/Summer/FileTracking_ASCII/'
-
-# Colors and Bounds
-clim_specs:
-  prec: [1e-2, 1e2]  # mm (in 30mn)
-  PW: [10, 70]  # mm
-
-cmap_specs:
-  prec: 'plt.cm.ocean_r'  # alternative plt.cm.bone_r
-  PW: 'plt.cm.RdBu'
-  mcs: 'plt.cm.get_cmap("Accent", 10)'
-
-norm_specs:
-  prec:
-    type: LogNorm
-    vmin: 0.01
-    vmax: 100.0
-  PW: null
+DIR_STORM_TRACKING_NETCDF : '/bdd/MT_WORKSPACE/MCS/MODELS/MCSMIP/TOOCAN/Summer/FileTracking_NETCDF/'
 
 # Regions of Analysis
-BOX: [-30, 30, -180, 180] # [lat_min, lat_max, lon_min, lon_max]
+BOX: [-15, 30, -180, 180] # [lat_min, lat_max, lon_min, lon_max]
 
 TIME_RANGE: [240, 959] # [start, end] in timestep (so rows) of dir_data_in
 # Feng avoids the 10 first day. I don't see anything weird in Precac except for the 10 first timestep
