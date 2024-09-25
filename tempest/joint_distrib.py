@@ -6,6 +6,7 @@ import pickle
 import time
 import xarray as xr 
 import seaborn as sns
+import scipy.stats as stats
 
 from numpy import ma
 
@@ -55,14 +56,27 @@ class JointDistribution():
         self.var_id = var_id
         self.prec = grid.get_var_id_ds(self.var_id) ## weird behavior, can't modify var_id input
 
-        if type(dist_mask) is not bool:
+        if isinstance(dist_mask, np.ndarray):
             if dist_mask.shape == self.prec[var_id_1].shape:
-                self.dist_mask = dist_mask #& xr.where(self.prec.mean_Prec > 0.001, True, False) #self.prec.Treshold_cond_alpha_50_Prec > 2
+                dist_mask = dist_mask #& xr.where(self.prec.mean_Prec > 0.001, True, False) #self.prec.Treshold_cond_alpha_50_Prec > 2
+                mask_str = "special_mask"
+            else : 
+                print("!!!! Wrong mask shape !!!!")
         elif dist_mask == True : 
             dist_mask = xr.where(self.prec.mean_Prec > 0.01, True, False)
+            mask_str = "meanPrec_over_0.01"
         elif dist_mask == False : 
             dist_mask = True
-
+            mask_str = "all"
+        elif dist_mask == "all": ## dist_mask = "all" has same behaviour than dist_mask = False
+            mask_str = "all"
+            dist_mask = np.repeat(self.grid.mask_all, 30, axis=2)   ## could replace 30 by n_days
+        elif dist_mask == "ocean":
+            mask_str = "ocean"
+            dist_mask = np.repeat(self.grid.mask_ocean, 30, axis=2) 
+        elif dist_mask == "land":
+            mask_str = "land"
+            dist_mask = np.repeat(self.grid.mask_land, 30, axis=2) 
         
         self.shape = np.shape(self.prec[self.var_id_1].to_numpy())
         
@@ -71,7 +85,6 @@ class JointDistribution():
         
         self.overwrite = overwrite
 
-
         abs_dir_out = self.settings["DIR_DATA_OUT"]
         # abs_dir_out = os.path.join(homedata_tempest_path, rel_dir_out)
         self.dir_out = os.path.join(abs_dir_out, self.name)
@@ -79,9 +92,8 @@ class JointDistribution():
         self.get_distribs()
         self.bins1 = self.dist1.bins
         self.bins2 = self.dist2.bins
-        
-        mask_str = "special_mask" if type(dist_mask) is not bool else str(dist_mask)
-        self.jd_name = f"{self.dist1.name}_joint_{self.dist2.name}_nbpd_{nbpd}_nd_{nd}_ dist_mask_"+mask_str
+
+        self.jd_name = f"{self.dist1.name}_joint_{self.dist2.name}_nbpd_{nbpd}_nd_{nd}_dist_mask_"+mask_str
         self.jd_path = os.path.join(self.dir_out, self.jd_name)
         
         if not os.path.exists(self.jd_path):
@@ -480,7 +492,7 @@ class JointDistribution():
             
         return popt_1, x_1, y_1, popt_2, x_2, y_2, func
 
-    def plot(self, mask = True, branch = False, fig=None, ax=None, title = None, N_branch=50, offset_low=0, offset_up=0):
+    def plot(self, mask = True, branch = False, fig=None, ax=None, model_name = None, N_branch=50, offset_low=0, offset_up=0, cbar = True):
         self.make_mask()
 
         if fig == ax == None :
@@ -488,7 +500,10 @@ class JointDistribution():
         
         Z = self.norm_density.T
 
-        if title is None : title = f"Normalized density"
+        if model_name is None : 
+            title = f"Normalized Density"
+        else : 
+            title = model_name + " Normalized Density"
         scale = 'log'
         vbds = (1e-3, 1e3)
         cmap = plt.cm.BrBG
@@ -501,12 +516,7 @@ class JointDistribution():
         ax.set_ylabel(r"km-scale")
         ax.set_title(title)
 
-        # # I think this doesnt' work, uselessly
-        # extent = (self.dist1.ranks[0], self.dist1.ranks[-1], self.dist2.ranks[0], self.dist2.ranks[-1])
-        # -- Density
-        
-
-        # -- Masks multiscale categories and colorbar
+        # -- Masks multiscale categories and colorbar, old replaced by the text floating box
         if mask : 
             pcm = show_joint_histogram(ax_show, np.zeros_like(Z), scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap) #extent = extent
             pcm_mask = ax_show.imshow(self.mask_show.T,alpha=1,origin='lower')
@@ -519,11 +529,13 @@ class JointDistribution():
                                 ax=ax_show, ticks=values, spacing='proportional')
             cb.set_ticklabels(['Only\nkm-scale', 'Mostly\nkm-scale', 'Mostly\n1°x1day', 'Only\n1°x1day'])
 
-        else : 
+        else: 
             pcm = show_joint_histogram(ax_show, Z[:,:], scale=scale, vmin=vbds[0], vmax=vbds[1], cmap=cmap) #extent = extent,
             cb = fig.colorbar(pcm, ax=ax_show)
             cb.set_label("Normalized density" ) 
 
+            if cbar is False : 
+                cb.remove()
 
         # -- Branches
         Z_contour = np.copy(Z)
@@ -537,19 +549,21 @@ class JointDistribution():
         x_branch_1 = func(y_branch_1,*popt_1)
         if branch[0] : 
             # show branches
-            ax_show.plot(x_branch_1,y_branch_1,'k--')
-            ax_show.plot(x_branch_2,y_branch_2,'k--')
+            ax_show.plot(x_branch_1,y_branch_1,'k--', linewidth = 3)
+            ax_show.plot(x_branch_2,y_branch_2,'k--', linewidth = 3)
         if branch[1] : 
             # show 1-1 line
-            ax_show.plot(x_branch_2,x_branch_2,'k--')
+            ax_show.plot(x_branch_2,x_branch_2,'k--', label  = model_name)
         
         return ax, cb, ax_show
 
-    def plot_data_contour(self, data, contour, contour_2, levels, scale = 'linear', cmap = plt.cm.RdBu_r, norm = None, branch = False, title = None, label = '', fig =None ,ax = None, vbds = (None, None), cb_bool = True):
+    def plot_data_contour(self, data, contour, contour_2, levels, scale = 'linear', cmap = plt.cm.RdBu_r, norm = None, branch = False, model_name = None, label = '', fig =None ,ax = None, vbds = (None, None), cb_bool = True):
         if fig==None and ax==None: 
             fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4.85))
-        if title is None : 
+        if model_name is None : 
             title = f"Data over Normalized density"
+        else : 
+            tile = model_name+" Normalized Density"
 
         def remove_small_blobs(arr, threshold=10):
             def get_blob_sum_and_coords(x, y, visited):
@@ -1001,7 +1015,7 @@ class JointDistribution():
         mask (str) : all, ocean, land
         """
         if mask == "all":
-            mask = np.repeat(self.grid.mask_all, 30, axis=2) 
+            mask = np.repeat(self.grid.mask_all, 30, axis=2)  ## could replace 30 by n_days
         elif mask == "ocean":
             mask = np.repeat(self.grid.mask_ocean, 30, axis=2) 
         elif mask == "land":
@@ -1033,25 +1047,36 @@ class JointDistribution():
      
     def plot_var_id_func_over_jdist(self, var_id, func, mask, cmap = plt.cm.viridis, title = "No title :( ", norm = None, plot_func = np.nanmean, vbds = (None, None), fig = None, ax = None, density = None):
         key = func+'_'+var_id
-        densities_path = os.path.join(self.settings["DIR_DATA_OUT"], f'{self.name}/densities/')
-        if not os.path.exists(densities_path):
-            os.makedirs(densities_path)
-        if type(mask) is str:
-            density_filename = f'{self.name}/densities/{key}_plot_func_{plot_func.__name__}_mask_{mask}_nbpd_{self.nbpd}_nd_{self.nd}.pkl'
-        else : 
-            density_filename = f'{self.name}/densities/{key}_plot_func_{plot_func.__name__}_special_mask_nbpd_{self.nbpd}_nd_{self.nd}.pkl'
-        density_filepath = os.path.join(self.settings["DIR_DATA_OUT"], density_filename)
+        if density is None : 
+            densities_path = os.path.join(self.settings["DIR_DATA_OUT"], f'{self.name}/{self.jd_name}/densities/')
+            if not os.path.exists(densities_path):
+                os.makedirs(densities_path)
+            if type(mask) is str:
+                density_filename = f'{self.name}/{self.jd_name}/densities/{key}_plot_func_{plot_func.__name__}_mask_{mask}_nbpd_{self.nbpd}_nd_{self.nd}.pkl'
+            else : 
+                density_filename = f'{self.name}/{self.jd_name}/densities/{key}_plot_func_{plot_func.__name__}_special_mask_nbpd_{self.nbpd}_nd_{self.nd}.pkl'
+            density_filepath = os.path.join(self.settings["DIR_DATA_OUT"], density_filename)
 
-        if os.path.exists(density_filepath): 
-            var_over_density = self.load_density(density_filepath)            
-        else : 
-            var_over_density = self.get_var_id_density_over_jdist(var_id, func, mask = mask, plot_func = plot_func) 
-            self.save_density(var_over_density, density_filepath)
-            
-        if fig is None : 
+            if os.path.exists(density_filepath): 
+                var_over_density = self.load_density(density_filepath)            
+            else : 
+                var_over_density = self.get_var_id_density_over_jdist(var_id, func, mask = mask, plot_func = plot_func) 
+                self.save_density(var_over_density, density_filepath)
+        else :
+            var_over_density = density
+        
+
+        if fig is None : ## Own plot
             fig, ax = plt.subplots(nrows = 1, ncols = 1, figsize = (6, 4.71))
-        ax, cb, ax_show = self.plot_data(var_over_density, data_noise = None, title = title, cmap = cmap, norm = norm, vbds = vbds, fig = fig, ax = ax, label = key)
-        return ax, cb, ax_show, var_over_density
+            ax, cb, ax_show = self.plot_data(var_over_density, data_noise = None, title = title, cmap = cmap, norm = norm, vbds = vbds, fig = fig, ax = ax, label = key)
+            return ax, cb, ax_show, var_over_density
+
+        elif fig is False : # No plot just data
+            return None, None, None, var_over_density
+            
+        else : # plot in given ax object
+            ax, cb, ax_show = self.plot_data(var_over_density, data_noise = None, title = title, cmap = cmap, norm = norm, vbds = vbds, fig = fig, ax = ax, label = key)
+            return ax, cb, ax_show, var_over_density
 
     def get_var_id_density_over_jdist(self, var_id, func, mask, plot_func = np.nanmean):
         key = func+'_'+var_id
@@ -1213,7 +1238,7 @@ class JointDistribution():
     def mutual_information(self, rank_threshold_int=20):
         """
         Look at CRPS Score (Felix Rein slides of WCO4) 
-        CRPS =UNC + MCB - DSC 
+        CRPS = UNC + MCB - DSC 
         Uncertainty + Miscallibration - Discrimitation 
     
         Isotonical distribution regression to post process forecast (simple?)
@@ -1236,7 +1261,134 @@ class JointDistribution():
                     pass
                     
         return mi_pos+mi_neg, mi_pos, mi_neg
-    
+
+        
+    def fit_sample(self, int_var_id, bool_show = False, fast = False):
+        """
+        fits the sample to the best probability distribution between a gpd and an exponential
+        returns dist as "genpareto" or "expon" and the parameters as params (either 3 o 2 accordingly to dist)
+        
+        sample is joint_distrib native sample1 or sample2
+        produces and saves plot with metric scores files under the joint distrib path
+        """
+        def expected_shortfall(data, alpha=0.95):
+            return np.mean([x for x in data if x > np.quantile(data, alpha)])
+
+        # Function to calculate Value at Risk (VaR)
+        def value_at_risk(data, alpha=0.95):
+            return np.quantile(data, alpha)
+
+        # Return Level for a given return period
+        def return_level(data, period, params):
+            shape, loc, scale = params
+            return loc + scale / shape * ((period * len(data))**shape - 1)
+
+        # Hill Estimator for the tail index
+        def hill_estimator(data, k):
+            sorted_data = np.sort(data)
+            return np.mean(np.log(sorted_data[-k:]) - np.log(sorted_data[-k-1]))
+
+        # Expected Shortfall / Tail Value at Risk
+        def expected_shortfall(data, alpha=0.95):
+            return np.mean([x for x in data if x > np.quantile(data, alpha)])
+        
+        treshold1 = self.dist1.percentiles[self.dist1.ranks==90]
+        treshold2 = self.dist2.percentiles[self.dist2.ranks==90]
+        mask = (self.sample1>treshold1) & (self.sample2>treshold2) 
+        
+        if int_var_id==1:
+            data = self.sample1[mask] - treshold1
+            var_id = self.var_id_1
+        elif int_var_id==2:
+            data = self.sample2[mask] - treshold2
+            var_id = self.var_id_2
+
+        # Fit distributions
+        params_gpd = stats.genpareto.fit(data)
+        params_expon = stats.expon.fit(data)
+        
+        # Goodness-of-fit tests
+        ks_gpd = stats.kstest(data, 'genpareto', args=params_gpd)
+        ks_expon = stats.kstest(data, 'expon', args=params_expon)
+        
+        if ks_gpd.statistic < ks_expon.statistic and ks_gpd.pvalue > ks_expon.pvalue:
+            best_fit_text = f"GPD is the best fit\nParameters: shape {params_gpd[0]:.4f}, location {params_gpd[1]:.4f}, scale {params_gpd[2]:.4f} \n K-S test for GPD: statistic={ks_gpd.statistic}, p-value={ks_gpd.pvalue} \n K-S test for Exponential: statistic={ks_expon.statistic}, p-value={ks_expon.pvalue}"
+            dist, params = "genpareto", params_gpd
+
+        elif ks_gpd.statistic > ks_expon.statistic and ks_gpd.pvalue < ks_expon.pvalue:
+            best_fit_text = f"Exponential is the best fit\nParameters: location {params_expon[0]:.4f}, scale {params_expon[1]:.4f} \n K-S test for Exponential: statistic={ks_expon.statistic}, p-value={ks_expon.pvalue}  \n K-S test for GPD: statistic={ks_gpd.statistic}, p-value={ks_gpd.pvalue}"
+
+            dist, params = "expon", params_expon
+        else:
+            best_fit_text = "Hard to tell, request user input"
+            dist, params = None, None
+        
+        if not fast : 
+            
+            # Generate PDF for each distribution
+            x = np.linspace(np.min(data), np.max(data), 1000)
+            pdf_gpd = stats.genpareto.pdf(x, *params_gpd)
+            pdf_expon = stats.expon.pdf(x, *params_expon)
+
+            # Plot the data and the fitted distributions
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.histplot(data, bins=1000, kde=False, color='grey', stat='density', label='Data')
+
+            ax.plot(x, pdf_gpd, 'b-', lw=2, label='GPD')
+            ax.plot(x, pdf_expon, 'y-', lw=2, label='Exponential')
+
+            ax.set_xlabel('Precipitation')
+            ax.set_ylabel('Density')
+            fig_path = os.path.join(self.dir_out, f"fit_results_{var_id}.png")
+
+
+            ax.text(0.1, 0.95, best_fit_text, transform=plt.gca().transAxes, fontsize=12,
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+            ax.legend()
+            ax.set_title('Fitted Distributions to Daily Precipitation Data')
+            plt.savefig(fig_path)
+            
+            if bool_show :
+                plt.show()
+
+            # Generate Q-Q plot
+            fig, ax = plt.subplots(figsize=(8, 6))
+            stats.probplot(data, dist=dist, sparams=params, plot=ax)
+            plt.title(f"Q-Q Plot for {dist} Fit")
+            fig_path = os.path.join(self.dir_out, f"qq_plot_{var_id}_{dist}_fit.png")
+            plt.savefig(fig_path)
+            if bool_show:
+                plt.show()
+                
+            # Calculate VaR and ES for the extreme data
+            alpha = 0.95
+            var = value_at_risk(data, alpha)
+            es = expected_shortfall(data, alpha)
+            # Choose a suitable number of upper order statistics (k)
+            k = int(0.1 * len(data))  # Top 10% of the extreme data
+            tail_index = hill_estimator(data, k)
+            # Additional Tail-Focused Analysis
+            shape, loc, scale = params_gpd
+            es = expected_shortfall(data)
+
+            output_text = (
+                best_fit_text + '\n'+
+                f'Value at Risk (VaR) at {alpha*100}%: {var}\n'
+                f'Expected Shortfall (TVaR/CVaR) at {alpha*100}%: {es}\n'
+                f'Hill Estimator for the tail index (k={k}): {tail_index}\n'
+                f'GPD Parameters: Shape={shape}, Location={loc}, Scale={scale}\n'
+                f'Expected Shortfall (ES) at 95%: {es}\n'
+            )
+            
+            if bool_show : 
+                print(output_text)
+            text_path = os.path.join(self.dir_out, f'risk_metrics_{var_id}_{dist}_fit.txt')
+
+            with open(text_path, 'w') as file:
+                file.write(output_text)
+                
+        return dist, params, data
+
     #     ## TODO catch var_unit somehow for cleaner labels
     #     key = func+'_'+var_id
     #     var_ds = self.grid.get_var_id_ds(var_id)

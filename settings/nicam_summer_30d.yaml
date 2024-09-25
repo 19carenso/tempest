@@ -44,7 +44,10 @@ new_var: ## These list and dict must be sorted by dependency
       "MCS_cond_Prec_15",
       "vDCS_cond_Prec_15", 
       "clouds_cond_Prec_15",
-      "sst"
+      "sst",
+      "MCS_cond_Prec_25",
+      "vDCS_cond_Prec_25", 
+      "clouds_cond_Prec_25",
     ]
 
   dependencies:
@@ -56,7 +59,10 @@ new_var: ## These list and dict must be sorted by dependency
       "MCS_cond_Prec_15" : ["MCS_Feng", "Prec"],
       "vDCS_cond_Prec_15" : ["vDCS", "Prec"],
       "clouds_cond_Prec_15" : ["MCS_label", "Prec"],
-      "sst" : []
+      "sst" : [],
+      "MCS_cond_Prec_25" : ["MCS_Feng", "Prec"],
+      "vDCS_cond_Prec_25" : ["vDCS", "Prec"],
+      "clouds_cond_Prec_25" : ["MCS_label", "Prec"],
     }
     
   functions:
@@ -68,7 +74,10 @@ new_var: ## These list and dict must be sorted by dependency
       "MCS_cond_Prec_15": "mcs_coverage_cond_prec_15",
       "vDCS_cond_Prec_15" : "vdcs_coverage_cond_prec_15",
       "clouds_cond_Prec_15" : "clouds_coverage_cond_Prec_15",
-      "sst" : "read_sst"
+      "sst" : "read_sst",
+      "MCS_cond_Prec_25": "mcs_coverage_cond_prec_25",
+      "vDCS_cond_Prec_25" : "vdcs_coverage_cond_prec_25",
+      "clouds_cond_Prec_25" : "clouds_coverage_cond_Prec_25",
     }
 
 skip_prec_i_t : 

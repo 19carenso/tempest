@@ -598,6 +598,18 @@ class Handler():
         del cond_prec
         gc.collect()
         return mcs_mask
+
+    def mcs_coverage_cond_prec_25(self, grid, i_t):
+        mcs_mask = self.read_seg_feng(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 75)
+        prec = self.load_var(grid, "Prec", i_t)
+        if "FV3" in self.settings["MODEL"] : ## remose last lat because this specifi grid is not centered like the others
+            mcs_mask = mcs_mask.isel(latitude=slice(0, -1))
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
     
     def sliding_mcs_coverage_cond_prec_15(self, grid, i_t):
         mcs_mask = self.read_seg_feng(grid, i_t)
@@ -628,9 +640,38 @@ class Handler():
         gc.collect()
         return mcs_mask
 
+    def vdcs_coverage_cond_prec_25(self, grid, i_t):
+        mcs_mask = self.read_filter_vdcs_seg(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 75)
+        prec = self.load_var(grid, "Prec", i_t)
+
+        if "FV3" in self.settings["MODEL"]: ## remose last lat because this specifi grid is not centered like the others
+            mcs_mask = mcs_mask.isel(latitude=slice(0, -1))
+
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
+
     def clouds_coverage_cond_Prec_15(self, grid, i_t):
         mcs_mask = self.read_seg(grid, i_t)
         cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+
+        if "FV3" in self.settings["MODEL"] : ## remose last lat because this specifi grid is not centered like the others
+            mcs_mask = mcs_mask.isel(latitude=slice(0, -1))
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
+
+    def clouds_coverage_cond_Prec_25(self, grid, i_t):
+        mcs_mask = self.read_seg(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 75)
         prec = self.load_var(grid, "Prec", i_t)
 
         if "FV3" in self.settings["MODEL"] : ## remose last lat because this specifi grid is not centered like the others
@@ -759,6 +800,39 @@ class Handler():
     def obs_clouds_coverage_cond_Prec_15(self, grid, i_t):
         mcs_mask = self.obs_seg(grid, i_t)
         cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 85)
+        prec = self.load_var(grid, "Prec", i_t)
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
+
+
+    def obs_mcs_coverage_cond_prec_25(self, grid, i_t):
+        mcs_mask = self.obs_seg_feng(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 75)
+        prec = self.load_var(grid, "Prec", i_t)
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
+    
+    def obs_vdcs_coverage_cond_prec_25(self, grid, i_t):
+        mcs_mask = self.obs_filter_vdcs_seg(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 75)
+        prec = self.load_var(grid, "Prec", i_t)
+        mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
+        
+        del prec
+        del cond_prec
+        gc.collect()
+        return mcs_mask
+
+    def obs_clouds_coverage_cond_Prec_25(self, grid, i_t):
+        mcs_mask = self.obs_seg(grid, i_t)
+        cond_prec = grid.get_cond_prec_on_native_for_i_t(i_t, alpha_threshold = 75)
         prec = self.load_var(grid, "Prec", i_t)
         mcs_mask = xr.where(prec.values > cond_prec, mcs_mask, np.nan)
         

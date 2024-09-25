@@ -46,7 +46,9 @@ class Grid():
         self.func_names = ['mean'] ## !!!!! usually ['max', 'mean'] especially for Prec !!!!! 
         self.cloud_vars = ["MCS_label", "MCS_Feng", "MCS_label_Tb_Feng", "Conv_MCS_label", 
                            "vDCS", "MCS_cond_Prec_15", "vDCS_cond_Prec_15", "clouds_cond_Prec_15", 
-                           "sliding_MCS_cond_Prec_15", "sliding_clouds_cond_Prec_15"]
+                           "sliding_MCS_cond_Prec_15", "sliding_clouds_cond_Prec_15",
+                           "MCS_cond_Prec_25", "vDCS_cond_Prec_25", "clouds_cond_Prec_25", 
+                           ]
         #### !!!!!!!!!!!!!!!!!!!!!!
 
         self.settings = casestudy.settings
@@ -448,7 +450,7 @@ class Grid():
             required_coordinates = ['lat_global', 'lon_global']
             missing_coordinates = [coord for coord in required_coordinates if coord not in ds.coords]
             if missing_coordinates:
-                # Il est corrompu on dirait... ROBIN ALED
+                # Il est corrompu on dirait...
                 print(f"The dataset is missing the following coordinates: {missing_coordinates}")
         self.mask_ocean  = ds.sel(lat_global=self.casestudy.lat_slice).Landmask == 0 ## this fucker is not compatible with -180, 180...
         self.mask_ocean = self.mask_ocean.values[:,:,np.newaxis]
@@ -469,8 +471,11 @@ class Grid():
         if var_id == "Prec" or "Prec_lowRes":
             ## this should desactivates everything but not sure, (it's due to the fact that the second time i coded it super well :) )
             funcs = ["cond_alpha_00", "cond_alpha_01", "cond_alpha_05", "cond_alpha_10","cond_alpha_20",  "cond_alpha_25", "cond_alpha_33", "cond_alpha_40",
-                     "cond_alpha_50", "cond_alpha_60", "cond_alpha_67", "cond_alpha_75", "cond_alpha_80", "cond_alpha_85", "cond_alpha_90", "cond_alpha_95",
-                     "cond_alpha_97", "cond_alpha_99",
+                     "cond_alpha_50", "cond_alpha_55","cond_alpha_60", "cond_alpha_62", "cond_alpha_64", "cond_alpha_65", "cond_alpha_66", "cond_alpha_67", 
+                     "cond_alpha_68", "cond_alpha_69", "cond_alpha_70", "cond_alpha_71", "cond_alpha_72", "cond_alpha_73", "cond_alpha_74", "cond_alpha_75",
+                     "cond_alpha_76", "cond_alpha_77", "cond_alpha_78", "cond_alpha_79", "cond_alpha_80", "cond_alpha_81", "cond_alpha_82", "cond_alpha_83", 
+                     "cond_alpha_84", "cond_alpha_85", "cond_alpha_86", "cond_alpha_87", "cond_alpha_88", "cond_alpha_89", "cond_alpha_90", "cond_alpha_91",
+                     "cond_alpha_92", "cond_alpha_93", "cond_alpha_94",  "cond_alpha_95", "cond_alpha_96", "cond_alpha_97", "cond_alpha_98", "cond_alpha_99",
                      "convective_01", "convective_02", "convective_03", "convective_04", "convective_05", "convective_06", "convective_08", "convective_10", 
                      "convective_12", "convective_15", "convective_20","convective_25", "convective_30", "convective_40", "convective_50", "max"] 
                      ### CAREFULL HERE, max mean (or single_timestep_regridding funcs must always be behind daily ones)
@@ -898,14 +903,14 @@ class Grid():
                 x_subset = x_subset_dirty[~np.isnan(x_subset_dirty)]
                 x_subset_cumsum  = np.nancumsum(x_subset) 
                 total_prec = x_subset_cumsum[-1]
-                sigma_time_array = np.zeros(shape = 48) # should catch a unique value depending on model there
+                sigma_time_array = np.zeros(shape = np.shape(x[:, slice_i_lat, slice_j_lon])[0]) #old was 48 instead of np.shape(x[:, slice_i_lat, slice_j_lon])[0]
 
                 if total_prec == 0 : 
                     mean = 0 
                     sigma = 0
                     rcond = 0
                     pcond = 0
-                    sigma_time = np.zeros(shape = 48)
+                    sigma_time = np.zeros(shape = np.shape(x[:, slice_i_lat, slice_j_lon])[0])
                     
                 else : 
                     x_clean = x_subset_cumsum/total_prec
@@ -1058,8 +1063,8 @@ class Grid():
         """
         Makes CS overlap bool map with  cond_Prec_85
         """
-        cloud_types = ["clouds_cond_prec_15", "vdcs_cond_prec_15", "mcs_cond_prec_15"]
-        assert cloud_type in cloud_types
+        # cloud_types = ["clouds_cond_prec_15", "vdcs_cond_prec_15", "mcs_cond_prec_15"]
+        # assert cloud_type in cloud_types
         cloud_intersect_var_id = "intersection_"+cloud_type
         
         sigma_85 = self.get_var_id_ds("Prec").Sigma_cond_alpha_85_Prec

@@ -38,12 +38,23 @@ if __name__ == '__main__':
     # st = storm_tracker.StormTracker(gr, label_var_id = "MCS_Feng", overwrite_storms = True, overwrite = False)
 
     # 2nd batch
-    gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
-    gr.compute_funcs_for_var_id("MCS_cond_Prec_15")
-    gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
-    gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
-    st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
+    # gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
+    # gr.compute_funcs_for_var_id("MCS_cond_Prec_15")
+    # gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
+    # gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
+    # st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
 
-    cloud_types = ["clouds_cond_prec_15", "vdcs_cond_prec_15", "mcs_cond_prec_15"]
+    # cloud_types = ["clouds_cond_prec_15", "vdcs_cond_prec_15", "mcs_cond_prec_15"]
+    # for cloud_type in cloud_types:
+    #     gr.build_cloud_intersect(cloud_type, coverage_threshold=0.5)
+
+    # bis 2nd batch
+    # gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
+    # gr.compute_funcs_for_var_id("MCS_cond_Prec_25")
+    # gr.compute_funcs_for_var_id("vDCS_cond_Prec_25")
+    # gr.compute_funcs_for_var_id("clouds_cond_Prec_25")
+    # st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
+
+    cloud_types = ["clouds_cond_prec_25", "vdcs_cond_prec_25", "mcs_cond_prec_25"]
     for cloud_type in cloud_types:
         gr.build_cloud_intersect(cloud_type, coverage_threshold=0.5)
