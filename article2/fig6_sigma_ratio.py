@@ -353,7 +353,7 @@ _, _, _, sigma_density_obs_summer = jd_summer.plot_var_id_func_over_jdist('Prec'
 axes[0,0].set_ylabel(r"$P_{0.25}$")
 axes[0,0].set_xlabel(r"$P$")
 cb.set_label(r"$\sigma_{0.25}$", fontsize=12)
-axes[0,0].set_title(r"Winter Observations Surface")
+axes[0,0].set_title(r"Winter Observations " + "\n"+ "surface " + r"\sigma_{0.25}")
 axes[0,0].text(-0., 1.05, "(a)", transform=axes[0,0].transAxes, fontweight='bold', va='top')
 
 ## Sigma ratio for explanation
@@ -368,19 +368,19 @@ ax, cb, ax_show, sigma_density_obs_summer = jd_summer.plot_var_id_func_over_jdis
 axes[0,1].set_ylabel(r"$P_{0.25}$")
 axes[0,1].set_xlabel(r"$P$")
 # cb.set_label()
-cb.ax.set_ylabel(r'$\frac{\sigma^{Winter}_{0.25}}{\sigma^{Summer}_{0.25}}$', fontsize=13, rotation = 0, labelpad = 20)
+cb.ax.set_ylabel(r'$\frac{\sigma^{Winter}_{0.25}}{\sigma^{Summer}_{0.25}}$', fontsize=16, rotation = 0, labelpad = 20)
 
-title = r"Observations Winter/Summer"+"\n"+ "Surface Ratio"
+title = r"Observations Winter/Summer"+"\n"+ "ratio of surface " +r"\sigma_{0.25}"
 axes[0,1].set_title(title)
 plot_kite(jd_summer, fig, ax_show)
 axes[0,1].text(-0., 1.05, "(b)", transform=axes[0,1].transAxes, fontweight='bold', va='top')
 
 
 # Titles for subplots
-axes[1, 0].set_title(r"Ocean Winter Model/Observation" + "\n" +"Surfaces Ratio")
-axes[2, 0].set_title(r"Land Winter Model/Observation" + "\n" +"Surfaces Ratio")
-axes[1, 1].set_title(r"Ocean Summer Model/Observation" + "\n" +"Surfaces Ratio")
-axes[2, 1].set_title(r"Land Summer Model/Observation" + "\n" +"Surfaces Ratio")
+axes[1, 0].set_title(r"Ocean Winter Model/Observation" + "\n" +"ratio of surface "+r"\sigma_{0.25}")
+axes[2, 0].set_title(r"Land Winter Model/Observation" + "\n" +"ratio of surface "+r"\sigma_{0.25}")
+axes[1, 1].set_title(r"Ocean Summer Model/Observation" + "\n" +"ratio of surface "+r"\sigma_{0.25}")
+axes[2, 1].set_title(r"Land Summer Model/Observation" + "\n" +"ratio of surface "+r"\sigma_{0.25}")
 
 # Loop through the index i
 for i in np.arange(4):
