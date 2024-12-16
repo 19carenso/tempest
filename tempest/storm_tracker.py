@@ -25,10 +25,10 @@ class StormTracker():
     """
     To instantiate Toocan's object only once per jd.
     """
-    def __init__(self, grid, label_var_id = "MCS_label", overwrite_storms = False, overwrite=False, verbose=False):
+    def __init__(self, casestudy, label_var_id = "MCS_label", overwrite_storms = False, overwrite=False, verbose=False):
         
-        self.grid = grid
-        self.settings = grid.settings
+        self.casestudy = casestudy
+        self.settings = casestudy.settings
         start_time = time.time()
         self.overwrite = overwrite 
         self.verbose = verbose
@@ -40,8 +40,8 @@ class StormTracker():
             self.dir_storm = self.settings['DIR_STORM_TRACKING_TB_FENG']
                 # Should check if regridded MCS labels are already stored in grid
             
-        self.labels_regridded_yxtm = grid.get_var_id_ds(self.label_var_id)[self.label_var_id].values
-        self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm), axis=3)
+        # # self.labels_regridded_yxtm = casestudy.get_var_id_ds(self.label_var_id)[self.label_var_id].values
+        # self.mask_labels_regridded_yxt = np.any(~np.isnan(self.labels_regridded_yxtm), axis=3)
 
         # could be built if temporal axis dimension of MCS was passsed in settings
 
@@ -103,7 +103,7 @@ class StormTracker():
     
     def load_storms_tracking(self, overwrite):
         ## Make it a netcdf so that we don't struggle with loading it anymore
-        dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.grid.casestudy.name)
+        dir_out = os.path.join(self.settings["DIR_DATA_OUT"], self.casestudy.name)
         file_storms = os.path.join(dir_out, "storms_"+self.label_var_id+".nc")
         model_name = self.settings["MODEL"].split("_")[0]
 
