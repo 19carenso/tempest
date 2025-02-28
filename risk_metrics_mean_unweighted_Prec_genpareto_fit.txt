@@ -1,5 +1,0 @@
-Value at Risk (VaR) at 95.0%: 2.6144159555435174
-Expected Shortfall (TVaR/CVaR) at 95.0%: 3.922059057573232
-Hill Estimator for the tail index (k=4859): 0.4260620372113415
-GPD Parameters: Shape=0.2333394916890441, Location=6.198520255896146e-06, Scale=0.5925650869495882
-Expected Shortfall (ES) at 95%: 3.922059057573232

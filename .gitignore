@@ -1,11 +1,10 @@
 cache/
 .vscode/
 build/
-figures/*
 article/
 article2/
 input/
-output/*
+output/
 tempest/__pycache__/*
 tempest/plots/__pycache__/*
 tempest.egg-info
@@ -21,3 +20,5 @@ viz/
 viz_old/
 tests/
 ml/
+old_scripts/
+scripts/

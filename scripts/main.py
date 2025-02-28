@@ -25,51 +25,23 @@ gr = grid.Grid(cs, fast = True, overwrite= overwrite, verbose_steps = False, ver
 # jd.prec.to_netcdf("/scratchx/mcarenso/tempest/DYAMOND_SAM_post_20_days_Tropics/prec2.nc")
 
 if __name__ == '__main__':
-    # # 1st batch 
-    # gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
-    # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
-    # gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
+    # 1st batch 
+    gr.compute_funcs_for_var_id("Prec", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
     
-    # print("Storm tracking clouds")
-    # st = storm_tracker.StormTracker(cs, label_var_id = "MCS_label", overwrite_storms = True, overwrite = False)
+    print("Storm tracking clouds")
+    st = storm_tracker.StormTracker(cs, label_var_id = "MCS_label", overwrite_storms = True, overwrite = False)
     print("Storm tracking mcs")
     st = storm_tracker.StormTracker(cs, label_var_id = "MCS_Feng", overwrite_storms = True, overwrite = False)
 
-    # # # 2nd batch
-    # gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
-    # gr.compute_funcs_for_var_id("MCS_cond_Prec_15", overwrite_var_id = True)
-    # gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
-    # gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
-    # st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
+    # # 2nd batch
+    gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
+    gr.compute_funcs_for_var_id("MCS_cond_Prec_15", overwrite_var_id = True)
+    gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
+    gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
+    st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
 
-    # cloud_types = ["clouds_cond_prec_25", "vdcs_cond_prec_25", "mcs_cond_prec_25"]
-    # for cloud_type in cloud_types:
-    #     gr.build_cloud_intersect(cloud_type, coverage_threshold=0.5)
-
-
-### OLD
-    # gr.compute_funcs_for_var_id("Prec_lowRes", overwrite_var_id=True)
-
-    # gr.compute_funcs_for_var_id("sst", overwrite_var_id=True)
-
-    # gr.compute_funcs_for_var_id("T2mm")
-
-    # gr.compute_funcs_for_var_id("MCS_label", overwrite_var_id=True)
-
-    # gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
-    
-    # gr.compute_funcs_for_var_id("Conv_MCS_label", overwrite_var_id=True)
-
-    # gr.compute_funcs_for_var_id("vDCS")
-    # st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
-
-    # gr.compute_funcs_for_var_id("MCS_cond_Prec_15")
-    # gr.compute_funcs_for_var_id("vDCS_cond_Prec_15")
-    # gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
-    # gr.compute_funcs_for_var_id("sliding_clouds_cond_Prec_15")
-    # gr.compute_funcs_for_var_id("sliding_mcs_cond_Prec_15")
-
-    # gr.compute_funcs_for_var_id("vDCS_Strat_Prec",  overwrite_var_id=True)
-    # gr.compute_funcs_for_var_id("vDCS_Conv_Prec", overwrite_var_id=True)
-    # jd = joint_distrib.JointDistribution(gr, nd= 5, overwrite = False, storm_tracking = True)
-    # jd.get_mcs_bin_fraction()   
+    cloud_types = ["clouds_cond_prec_25", "vdcs_cond_prec_25", "mcs_cond_prec_25"]
+    for cloud_type in cloud_types:
+        gr.build_cloud_intersect(cloud_type, coverage_threshold=0.5)
