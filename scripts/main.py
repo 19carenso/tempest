@@ -9,7 +9,7 @@ from tempest import handler
 from tempest import joint_distrib
 from tempest import storm_tracker
 
-settings_path = "settings/arpege_summer_30d.yaml"
+settings_path = "settings/xshield_winter_30d.yaml"
 
 workdir=os.getcwd()
 print(workdir)
@@ -31,9 +31,9 @@ if __name__ == '__main__':
     # gr.compute_funcs_for_var_id("MCS_Feng", overwrite_var_id=True)
     
     # print("Storm tracking clouds")
-    # st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = True, overwrite = False)
-    # print("Storm tracking mcs")
-    # st = storm_tracker.StormTracker(gr, label_var_id = "MCS_Feng", overwrite_storms = True, overwrite = False)
+    # st = storm_tracker.StormTracker(cs, label_var_id = "MCS_label", overwrite_storms = True, overwrite = False)
+    print("Storm tracking mcs")
+    st = storm_tracker.StormTracker(cs, label_var_id = "MCS_Feng", overwrite_storms = True, overwrite = False)
 
     # # # 2nd batch
     # gr.compute_funcs_for_var_id("vDCS", overwrite_var_id=True)
@@ -42,9 +42,9 @@ if __name__ == '__main__':
     # gr.compute_funcs_for_var_id("clouds_cond_Prec_15")
     # st = storm_tracker.StormTracker(gr, label_var_id = "vDCS", overwrite_storms = True, overwrite = False)
 
-    cloud_types = ["clouds_cond_prec_25", "vdcs_cond_prec_25", "mcs_cond_prec_25"]
-    for cloud_type in cloud_types:
-        gr.build_cloud_intersect(cloud_type, coverage_threshold=0.5)
+    # cloud_types = ["clouds_cond_prec_25", "vdcs_cond_prec_25", "mcs_cond_prec_25"]
+    # for cloud_type in cloud_types:
+    #     gr.build_cloud_intersect(cloud_type, coverage_threshold=0.5)
 
 
 ### OLD

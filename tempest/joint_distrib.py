@@ -470,6 +470,7 @@ class JointDistribution():
         else:
             seg_1 = max(cont.allsegs[0], key=len)  # If allsegs is used, find the longest in the first set of segments
 
+        print(seg_1.shape)
         O = np.argmin(np.linalg.norm(seg_1, axis=1))
 
         # Branch 1 -- end of contour (upward branch)
@@ -477,19 +478,20 @@ class JointDistribution():
         y_1 = ydata_1 = seg_1[O-off_up-N:O-off_up,1]
 
         # fit
-        popt_1, pcov_1 = curve_fit(func, ydata_1, xdata_1,p0=(-10,1,0))
+        print("Fitting 1st branch")
+        popt_1, pcov_1 = curve_fit(func, ydata_1, xdata_1,p0=(-10,1,0), bounds=((-np.inf, 0, -np.inf), (np.inf, 5, np.inf)))
         x_1 = func(ydata_1, *popt_1)
-
+        print("1st branch successfully fitted")
         # Branch 2 -- start of contour
         x_2 = xdata_2 = seg_1[O+off_low:O+off_low+N,0]
         ydata_2 = seg_1[O+off_low:O+off_low+N,1]
 
         # fit
-        popt_2, pcov_2 = curve_fit(func, xdata_2, ydata_2,p0=(-10,1,0))
+        print("Fitting 2nd branch")
+        popt_2, pcov_2 = curve_fit(func, xdata_2, ydata_2,p0=(-10,1,0), bounds=((-np.inf, 0, -np.inf), (np.inf, 5, np.inf)))
         y_2 = func(xdata_2, *popt_2)
-                
+        print("2nd branch successfully fitted")
 
-            
         return popt_1, x_1, y_1, popt_2, x_2, y_2, func
 
     def plot(self, mask = True, branch = False, fig=None, ax=None, model_name = None, N_branch=50, offset_low=0, offset_up=0, cbar = True):
@@ -645,7 +647,7 @@ class JointDistribution():
         For each joint extreme in bin (i,j), return mask in the spatiotemporal domain.
         """
         
-        mask_yxt_all = False
+        mask_yxt_all = np.full(self.shape, False, dtype=bool)
         i_j_mask = np.where(mask_jdist)
         
         for i,j in zip(i_j_mask[0],i_j_mask[1]):
@@ -1014,18 +1016,20 @@ class JointDistribution():
         """
         mask (str) : all, ocean, land
         """
-        if mask == "all":
-            mask = np.repeat(self.grid.mask_all, 30, axis=2)  ## could replace 30 by n_days
-        elif mask == "ocean":
-            mask = np.repeat(self.grid.mask_ocean, 30, axis=2) 
-        elif mask == "land":
-            mask = np.repeat(self.grid.mask_land, 30, axis=2) 
-        elif type(mask) is not str:
-            print("special mask applied for conditional density")
-            
         var_days = list(data.days.values)  
         prec_days = list(self.prec.days.values)  
         days_filter = np.array([prec_day in var_days for prec_day in prec_days])
+
+        if mask == "all":
+            mask = np.repeat(self.grid.mask_all, len(var_days), axis=2)  ## could replace len(var_days) by n_days
+        elif mask == "ocean":
+            mask = np.repeat(self.grid.mask_ocean, len(var_days), axis=2) 
+        elif mask == "land":
+            mask = np.repeat(self.grid.mask_land, len(var_days), axis=2) 
+        elif type(mask) is not str:
+            print("special mask applied for conditional density")
+            
+
 
         n_i, n_j = self.bincount.shape
         data_over_density = np.full(shape=(n_i,n_j), fill_value=np.nan)

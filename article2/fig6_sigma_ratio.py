@@ -3,8 +3,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns  # Seaborn enhances the aesthetics of matplotlib plots
 
-
-
 import pandas as pd
 import xarray as xr
 import seaborn as sns
@@ -25,12 +23,18 @@ from tempest import joint_distrib
 from tempest import handler
 from tempest.plots.hist import simple_hist
 
-alpha = "50" #compare to article this is 100(1-alpha) 
+#please work everywhere
+# from matplotlib import rc
+# rc('text', usetex=True)
+# rc('font', family='serif')
+
+alpha = "75" #compare to article this is 100(1-alpha) 
 nbpd = 20 # maybe trying with 40 once the legends are added
 nd = 4
 same_rank_bool = True # if False then the jdist ranks are computed for ocean and land, rather than for both
 
-fig_path = f"/scratchx/mcarenso/tempest/figures/sigma_ratios_nd_{nd}_nbpd_{nbpd}_alpha_{alpha}_same_rank_{str(same_rank_bool)}.png"
+# fig_path = f"/scratchx/mcarenso/tempest/figures/sigma_ratios_nd_{nd}_nbpd_{nbpd}_alpha_{alpha}_same_rank_{str(same_rank_bool)}.png"
+fig_path = f"/home/mcarenso/code/tempest/output/sigma_ratios_nd_{nd}_nbpd_{nbpd}_alpha_{alpha}_same_rank_{str(same_rank_bool)}.png"
 
 
 def find_plot_contour(self, ax_show , N_branch=80, offset_low = 1, offset_up=1, color = 'k', lstyle = '--', model_name = None):
@@ -40,6 +44,10 @@ def find_plot_contour(self, ax_show , N_branch=80, offset_low = 1, offset_up=1, 
     # Z_contour[18:, 18:] = 1 ## this number actually depends on nd and nbpd and the general shape of the Y 
     cont = measure.find_contours(Z_contour, 1)
     N = N_branch
+
+    # print(len(cont))
+    # for i, c in enumerate(cont):
+    #     print(i, c.shape)
     # fit
     popt_1, x_1, y_1, popt_2, x_2, y_2, func = self._fit_branches(cont,N, offset_low, offset_up)
     x_branch_2 = y_branch_1 = np.linspace(5,N_branch,N_branch)
@@ -101,21 +109,22 @@ def plot_kite(jd, fig=None, ax=None):
     dd99_vertices.append((40, 40))  
 
     polygons = [
-        (km90_vertices, 'green', '90th km'),
-        (km99_vertices, 'lime', '99th km'),
-        (dd99_vertices, 'cyan', '99th dd'),
-        (dd90_vertices, 'blue', '90th dd')
+        (km90_vertices, 'green', '90th \n km '),
+        (km99_vertices, 'lime', '99th \n km '),
+        (dd99_vertices, 'cyan', '99th \n dd '),
+        (dd90_vertices, 'blue', '90th \n dd ')
     ]
 
     # Create a new patch with the constructed vertices
     for vertices, color, label in polygons:
-        polygon = MplPolygon(vertices, closed=True, edgecolor=color, facecolor=color, linewidth=2, linestyle='--', alpha=0.2)
+                                                #reviewer doesn't like color so ciao facecolor=color
+        polygon = MplPolygon(vertices, closed=True, edgecolor=color, facecolor="none", linewidth=3, linestyle='--', alpha=0.8) 
         ax.add_patch(polygon)
         
         # Calculate approximate center for text placement
         x_coords, y_coords = zip(*vertices)
-        center_x = np.mean(x_coords)
-        center_y = np.mean(y_coords)
+        center_x = np.mean(x_coords) if "dd" in label else np.mean(x_coords)-8
+        center_y = np.mean(y_coords) if "km" in label else np.mean(y_coords)-8
         
         # Add text annotation
         text = ax.text(center_x, center_y, label, color=color, fontsize=12, ha='center', va='center', weight='bold')
@@ -131,7 +140,6 @@ def apply_mask(data, mask, mask_compat):
     fdata[~fmask] = np.nan
     rdata = fdata.reshape(shape)
     return rdata
-
 
 # Objective function to minimize
 def objective(coeff, data, data2):
@@ -150,7 +158,6 @@ def objective(coeff, data, data2):
     # Calculate the Frobenius norm
     norm = np.linalg.norm(data_flat - scaled_data2)
     return norm
-
 
 def compute_sigma_ratios(data_obs, data_list, jds): #sigma_density_obs_winter, sigma_density_winter_models
     data = np.copy(data_obs.T)
@@ -224,10 +231,10 @@ settings_path = 'settings/obs_winter_30d.yaml'
 hdlr = handler.Handler(settings_path)
 cs = casestudy.CaseStudy(hdlr, overwrite = False ,verbose = False)
 gr = grid.Grid(cs, fast = True, overwrite= False, verbose_steps = False, verbose = False)
-st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False)
+# st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False)
 jd = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = False)
-jd_ocean = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "ocean")
-jd_land = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "land")
+# jd_ocean = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "ocean")
+# jd_land = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "land")
 
 
 settings_paths = ["settings/arpege_winter_30d.yaml", "settings/ifs_winter_30d.yaml", "settings/mpas_winter_30d.yaml", "settings/screamv1_winter_30d.yaml", "settings/sam_winter_30d.yaml", "settings/um_winter_30d.yaml", "settings/xshield_winter_30d.yaml", "settings/geos_winter_30d.yaml", "settings/grist_winter_30d.yaml",                ]
@@ -237,10 +244,10 @@ css = [casestudy.CaseStudy(hdlr, overwrite = False ,verbose = False) for hdlr in
 grs = [grid.Grid(cs, fast = True, overwrite= False, verbose_steps = False, verbose = False) for cs in css]
 jds_winter = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
         nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = False) for gr in grs]
-jds_winter_ocean = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
-        nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "ocean") for gr in grs]
-jds_winter_land = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
-        nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "land") for gr in grs]
+# jds_winter_ocean = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
+#         nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "ocean") for gr in grs]
+# jds_winter_land = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
+#         nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "land") for gr in grs]
 
 sigma_density_winter_ocean_models = []
 sigma_density_winter_land_models = []
@@ -254,15 +261,16 @@ if same_rank_bool :
 
         sigma_density_winter_ocean_models.append(sigma_density_model_winter_ocean)
         sigma_density_winter_land_models.append(sigma_density_model_winter_land)
-else : 
-    _, _, _, sigma_density_obs_winter_ocean = jd_ocean.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "ocean", fig = False)
-    _, _, _, sigma_density_obs_winter_land = jd_land.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "land", fig = False) 
-    for jd_ocean, jd_land in zip(jds_winter_ocean, jds_winter_land):
-        _, _, _, sigma_density_model_winter_ocean = jd_ocean.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "ocean", fig = False) 
-        _, _, _, sigma_density_model_winter_land = jd_land.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "land", fig = False) 
+        
+# else : 
+#     _, _, _, sigma_density_obs_winter_ocean = jd_ocean.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "ocean", fig = False)
+#     _, _, _, sigma_density_obs_winter_land = jd_land.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "land", fig = False) 
+#     for jd_ocean, jd_land in zip(jds_winter_ocean, jds_winter_land):
+#         _, _, _, sigma_density_model_winter_ocean = jd_ocean.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "ocean", fig = False) 
+#         _, _, _, sigma_density_model_winter_land = jd_land.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "land", fig = False) 
 
-        sigma_density_winter_ocean_models.append(sigma_density_model_winter_ocean)
-        sigma_density_winter_land_models.append(sigma_density_model_winter_land)
+#         sigma_density_winter_ocean_models.append(sigma_density_model_winter_ocean)
+#         sigma_density_winter_land_models.append(sigma_density_model_winter_land)
 
 ### SUMMER ###
 settings_paths = ["settings/arpege_summer_30d.yaml", "settings/ifs_summer_30d.yaml" , "settings/mpas_summer_30d.yaml", "settings/screamv1_summer_30d.yaml", "settings/sam_summer_30d.yaml", "settings/um_summer_30d.yaml", "settings/fv3_summer_30d.yaml",  "settings/nicam_summer_30d.yaml"]
@@ -272,19 +280,19 @@ css = [casestudy.CaseStudy(hdlr, overwrite = False ,verbose = False) for hdlr in
 grs = [grid.Grid(cs, fast = True, overwrite = False, verbose_steps = False, verbose = False) for cs in css]
 jds_summer = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
         nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = False) for gr in grs]
-jds_summer_ocean = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
-        nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "ocean") for gr in grs]
-jds_summer_land = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
-        nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "land") for gr in grs]
+# jds_summer_ocean = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
+#         nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "ocean") for gr in grs]
+# jds_summer_land = [joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec", 
+#         nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "land") for gr in grs]
 
 settings_path = 'settings/obs_summer_30d.yaml'
 hdlr = handler.Handler(settings_path)
 cs = casestudy.CaseStudy(hdlr, overwrite = False ,verbose = False)
 gr = grid.Grid(cs, fast = True, overwrite= False, verbose_steps = False, verbose = False)
-st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False)
+# st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False)
 jd = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec",nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = False)
-jd_ocean = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec",nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "ocean")
-jd_land = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec",nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "land")
+# jd_ocean = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec",nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "ocean")
+# jd_land = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_"+alpha+"_Prec",nbpd = nbpd,  nd=nd, overwrite = True, dist_mask = "land")
 
 sigma_density_summer_ocean_models = []
 sigma_density_summer_land_models  = []
@@ -297,14 +305,14 @@ if same_rank_bool :
         _, _, _, sigma_density_model_summer_land  = jd.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "land", fig = False)
         sigma_density_summer_ocean_models.append(sigma_density_model_summer_ocean)
         sigma_density_summer_land_models.append(sigma_density_model_summer_land)
-else : 
-    _, _, _, sigma_density_obs_summer_ocean = jd_ocean.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "ocean", fig = False) 
-    _, _, _, sigma_density_obs_summer_land  = jd_land.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "land", fig = False)
-    for jd_ocean, jd_land in zip(jds_summer_ocean, jds_summer_land): 
-        _, _, _, sigma_density_model_summer_ocean = jd_ocean.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "ocean", fig = False)
-        _, _, _, sigma_density_model_summer_land  = jd_land.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "land", fig = False)
-        sigma_density_summer_ocean_models.append(sigma_density_model_summer_ocean)
-        sigma_density_summer_land_models.append(sigma_density_model_summer_land)
+# else : 
+#     _, _, _, sigma_density_obs_summer_ocean = jd_ocean.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "ocean", fig = False) 
+#     _, _, _, sigma_density_obs_summer_land  = jd_land.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "land", fig = False)
+#     for jd_ocean, jd_land in zip(jds_summer_ocean, jds_summer_land): 
+#         _, _, _, sigma_density_model_summer_ocean = jd_ocean.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "ocean", fig = False)
+#         _, _, _, sigma_density_model_summer_land  = jd_land.plot_var_id_func_over_jdist('Prec', func = 'Sigma_cond_alpha_'+alpha, mask = "land", fig = False)
+#         sigma_density_summer_ocean_models.append(sigma_density_model_summer_ocean)
+#         sigma_density_summer_land_models.append(sigma_density_model_summer_land)
 
 
 ## Compute
@@ -329,14 +337,14 @@ settings_path = 'settings/obs_winter_30d.yaml'
 hdlr = handler.Handler(settings_path)
 cs = casestudy.CaseStudy(hdlr, overwrite = False ,verbose = False)
 gr = grid.Grid(cs, fast = True, overwrite= False, verbose_steps = False, verbose = False)
-st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False)
+# st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False)
 jd_winter = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_75_Prec", nbpd = 20,  nd=4, overwrite = True, dist_mask = "all")
 
 settings_path = 'settings/obs_summer_30d.yaml'
 hdlr = handler.Handler(settings_path)
 cs = casestudy.CaseStudy(hdlr, overwrite = False ,verbose = False)
 gr = grid.Grid(cs, fast = True, overwrite= False, verbose_steps = False, verbose = False)
-st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False)
+# st = storm_tracker.StormTracker(gr, label_var_id = "MCS_label", overwrite_storms = False, overwrite = False)
 jd_summer = joint_distrib.JointDistribution(gr, None, var_id_1 = "mean_unweighted_Prec", var_id_2 = "cond_alpha_75_Prec", nbpd = 20,  nd=4, overwrite = True, dist_mask = "all")
 
 
@@ -353,7 +361,7 @@ _, _, _, sigma_density_obs_summer = jd_summer.plot_var_id_func_over_jdist('Prec'
 axes[0,0].set_ylabel(r"$P_{0.25}$")
 axes[0,0].set_xlabel(r"$P$")
 cb.set_label(r"$\sigma_{0.25}$", fontsize=12)
-axes[0,0].set_title(r"Winter Observations " + "\n"+ "surface " + r"\sigma_{0.25}")
+axes[0,0].set_title(r"Winter Observations " + "\n"+ "surface " + r"$\sigma_{0.25}$")
 axes[0,0].text(-0., 1.05, "(a)", transform=axes[0,0].transAxes, fontweight='bold', va='top')
 
 ## Sigma ratio for explanation
@@ -370,17 +378,21 @@ axes[0,1].set_xlabel(r"$P$")
 # cb.set_label()
 cb.ax.set_ylabel(r'$\frac{\sigma^{Winter}_{0.25}}{\sigma^{Summer}_{0.25}}$', fontsize=16, rotation = 0, labelpad = 20)
 
-title = r"Observations Winter/Summer"+"\n"+ "ratio of surface " +r"\sigma_{0.25}"
+title = r"Observations Winter/Summer"+"\n"+ "ratio of surface " +r"$\sigma_{0.25}$"
 axes[0,1].set_title(title)
 plot_kite(jd_summer, fig, ax_show)
 axes[0,1].text(-0., 1.05, "(b)", transform=axes[0,1].transAxes, fontweight='bold', va='top')
 
+title1 = "Ocean Winter Model/Observation" +"\n"+r"ratio of surface $\sigma_{0.25}$"
+title2 = "Land Winter Model/Observation" +"\n"+r"ratio of surface $\sigma_{0.25}$"
+title3 = "Ocean Summer Model/Observation"+"\n"+r"ratio of surface $\sigma_{0.25}$"
+title4 = "Land Summer Model/Observation"+"\n"+r"ratio of surface $\sigma_{0.25}$"
 
 # Titles for subplots
-axes[1, 0].set_title(r"Ocean Winter Model/Observation" + "\n" +"ratio of surface "+r"\sigma_{0.25}")
-axes[2, 0].set_title(r"Land Winter Model/Observation" + "\n" +"ratio of surface "+r"\sigma_{0.25}")
-axes[1, 1].set_title(r"Ocean Summer Model/Observation" + "\n" +"ratio of surface "+r"\sigma_{0.25}")
-axes[2, 1].set_title(r"Land Summer Model/Observation" + "\n" +"ratio of surface "+r"\sigma_{0.25}")
+axes[1, 0].set_title(title1)
+axes[2, 0].set_title(title2)
+axes[1, 1].set_title(title3)
+axes[2, 1].set_title(title4)
 
 # Loop through the index i
 for i in np.arange(4):
@@ -455,5 +467,5 @@ axes[2,1].text(-0., 1.05, "(f)", transform=axes[2,1].transAxes, fontweight='bold
 fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 # Show the plot
-plt.savefig(fig_path, dpi = 300)
+plt.savefig("final_fig/fig8.pdf")
 plt.show()
